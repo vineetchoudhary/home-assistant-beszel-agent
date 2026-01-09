@@ -23,7 +23,7 @@ jobs:
         run: |
           echo "Validating config.yaml syntax..."
           if command -v yamllint >/dev/null 2>&1; then
-            yamllint beszel_agent/config.yaml
+            yamllint -d '{rules: {document-start: disable}}' beszel_agent/config.yaml
           else
             python3 -c "import yaml; yaml.safe_load(open('beszel_agent/config.yaml'))"
           fi

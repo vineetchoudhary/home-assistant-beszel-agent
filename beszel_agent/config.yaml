@@ -1,8 +1,5 @@
----
 name: "Beszel Agent"
-description: >-
-  Lightweight server monitoring hub with historical data,
-  docker stats, and alerts
+description: "Beszel Agent Add-on for Home Assistant"
 version: "0.17.0"
 slug: "beszel-agent"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
