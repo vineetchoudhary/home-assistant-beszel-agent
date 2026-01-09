@@ -10,13 +10,13 @@
 
 1. **Clone it:**
 ```bash
-git clone https://github.com/vineetchoudhary/ha-beszel-agent.git
-cd ha-beszel-agent
+git clone https://github.com/vineetchoudhary/home-assistant-beszel-agent.git
+cd home-assistant-beszel-agent
 ```
 
 2. **Add to Home Assistant:**
 - **Supervisor** → **Add-on Store** → **⋮** → **Repositories**
-- Add: `file:///path/to/ha-beszel-agent` (full path)
+- Add: `file:///path/to/home-assistant-beszel-agent` (full path)
 
 3. **Install it:**
 - Refresh the add-on store page

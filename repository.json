@@ -1,5 +1,5 @@
 {
-  "name": "Beszel Home Assistant Add-ons",
-  "url": "https://github.com/vineetchoudhary/ha-beszel-agent",
+  "name": "Beszel Agent for Home Assistant",
+  "url": "https://github.com/vineetchoudhary/home-assistant-beszel-agent",
   "maintainer": "Vineet Choudhary"
 }

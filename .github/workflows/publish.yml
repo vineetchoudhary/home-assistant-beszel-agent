@@ -110,7 +110,7 @@ jobs:
           echo "Tagging images with version ${VERSION} and latest..."
           
           for ARCH in "${ARCHS[@]}"; do
-            IMAGE="ghcr.io/vineetchoudhary/ha-beszel-agent-${ARCH}"
+            IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-${ARCH}"
             
             # Tag with version
             docker buildx imagetools create \

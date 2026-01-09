@@ -5,7 +5,7 @@ description: >-
   docker stats, and alerts
 version: "0.17.0"
 slug: "beszel-agent"
-url: "https://github.com/vineetchoudhary/ha-beszel-agent"
+url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
 init: false
 startup: application
 boot: auto
@@ -21,7 +21,7 @@ arch:
   - i386
 ports:
   45876/tcp: 45876
-image: "ghcr.io/vineetchoudhary/ha-beszel-agent-{arch}"
+image: "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}"
 options:
   key: ""
   hub_url: ""

@@ -6,7 +6,7 @@ Thanks for helping out!
 
 Check the [beszel repository first](https://github.com/henrygd/beszel/issues), it might be a Beszel issue. 
 
-If it's specific to this add-on, please, search [existing issues](https://github.com/vineetchoudhary/ha-beszel-agent/issues) first. If it's new:
+If it's specific to this add-on, please, search [existing issues](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) first. If it's new:
 
 1. Open a new issue
 2. Include:

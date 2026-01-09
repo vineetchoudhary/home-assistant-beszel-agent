@@ -12,7 +12,7 @@ Lightweight design that won't slow down your system.
 
 ## Setup
 
-1. Add repository: **Supervisor** → **Add-on Store** → **⋮** → **Repositories** → paste `https://github.com/vineetchoudhary/ha-beszel-agent`
+1. Add repository: **Supervisor** → **Add-on Store** → **⋮** → **Repositories** → paste `https://github.com/vineetchoudhary/home-assistant-beszel-agent`
 2. Install "Beszel Agent" from the store
 3. Configure (see below)
 4. Start the add-on
@@ -108,10 +108,10 @@ Most users need to disable Protection mode for Docker and D-Bus access.
 
 ## Need Help?
 
-- [Report issues on GitHub](https://github.com/vineetchoudhary/ha-beszel-agent/issues)
+- [Report issues on GitHub](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues)
 - [Check out Beszel docs](https://github.com/henrygd/beszel)
 
 ## License
 
-MIT - see [LICENSE](https://github.com/vineetchoudhary/ha-beszel-agent/blob/main/LICENSE)
+MIT - see [LICENSE](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/LICENSE)
 

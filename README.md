@@ -6,11 +6,11 @@ Monitor your Home Assistant system with Beszel. Tracks CPU, memory, disk, networ
 
 Click this button to add the repository:
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with this repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/vineetchoudhary/ha-beszel-agent)
+[![Open your Home Assistant instance and show the add add-on repository dialog with this repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/vineetchoudhary/home-assistant-beszel-agent)
 
 Or add it manually:
 - Go to **Supervisor** → **Add-on Store** → **⋮** → **Repositories**
-- Paste: `https://github.com/vineetchoudhary/ha-beszel-agent`
+- Paste: `https://github.com/vineetchoudhary/home-assistant-beszel-agent`
 - Find "Beszel Agent" in the store and hit Install
 
 ## Documentation
@@ -26,7 +26,7 @@ Beszel is a lightweight monitoring solution that keeps track of your server's vi
 
 ## Getting Help
 
-Having trouble? [Open an issue](https://github.com/vineetchoudhary/ha-beszel-agent/issues) and I'll try to help.
+Having trouble? [Open an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) and I'll try to help.
 
 ## License
 
