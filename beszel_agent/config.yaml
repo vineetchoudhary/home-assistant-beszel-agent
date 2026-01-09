@@ -32,11 +32,9 @@ schema:
   environment_vars:
     - name: str
       value: str
-    - list?
   custom_volumes:
     - host_path: str
       container_path: str
-    - list?
 map:
   - type: addon_config
     read_only: false
