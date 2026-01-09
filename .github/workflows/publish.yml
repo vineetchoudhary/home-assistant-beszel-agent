@@ -1,0 +1,146 @@
+name: Build and Publish
+
+on:
+  # Check for new releases every 8 hours
+  schedule:
+    - cron: '0 */8 * * *'
+  # Allow manual trigger
+  workflow_dispatch:
+  # Trigger on new tags/releases in this repo
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - name: Determine trigger type
+        id: trigger_type
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "type=tag" >> $GITHUB_OUTPUT
+            echo "This is a tag-based release - will use latest Beszel version"
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "type=scheduled" >> $GITHUB_OUTPUT
+            echo "This is a scheduled check"
+          else
+            echo "type=manual" >> $GITHUB_OUTPUT
+            echo "This is a manual trigger"
+          fi
+
+      - name: Get latest release version
+        id: get_version
+        run: |
+          VERSION=$(curl -s https://api.github.com/repos/henrygd/beszel/releases/latest | jq -r .tag_name)
+          VERSION=$(echo "$VERSION" | sed 's/^v//')
+          echo "Latest Beszel version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if config file version is up-to-date
+        id: check_version
+        run: |
+          CONFIG_VERSION=$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')
+          echo "Config version: $CONFIG_VERSION"
+          
+          # For tag-based releases, always build with latest version
+          if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
+            echo "Tag-based release: Building with latest Beszel version (${{ steps.get_version.outputs.VERSION }})"
+            echo "run_steps=true" >> $GITHUB_OUTPUT
+          elif [ "$CONFIG_VERSION" = "${{ steps.get_version.outputs.VERSION }}" ]; then
+            echo "Version is up-to-date. Skipping further steps."
+            echo "run_steps=false" >> $GITHUB_OUTPUT
+          else
+            echo "Version is outdated. Proceeding with updates."
+            echo "run_steps=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update version in beszel_agent config file
+        if: steps.check_version.outputs.run_steps == 'true'
+        run: |
+          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent/config.yaml
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+
+      - name: Login to GitHub Container Registry
+        if: steps.check_version.outputs.run_steps == 'true'
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Home Assistant Image (amd64 & aarch64 - Latest Builder)
+        if: steps.check_version.outputs.run_steps == 'true'
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --amd64 \
+            --aarch64 \
+            --target beszel_agent \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Publish Home Assistant Image (armv7, armhf, i386 - Legacy Builder)
+        if: steps.check_version.outputs.run_steps == 'true'
+        uses: home-assistant/builder@2025.09.0
+        with:
+          args: |
+            --armv7 \
+            --armhf \
+            --i386 \
+            --target beszel_agent \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Tag images with latest
+        if: steps.check_version.outputs.run_steps == 'true'
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          # List of all supported architectures
+          ARCHS=("aarch64" "amd64" "armv7" "armhf" "i386")
+          
+          echo "Tagging images with version ${VERSION} and latest..."
+          
+          for ARCH in "${ARCHS[@]}"; do
+            IMAGE="ghcr.io/vineetchoudhary/ha-beszel-agent-${ARCH}"
+            
+            # Tag with version
+            docker buildx imagetools create \
+              "${IMAGE}:latest" \
+              --tag "${IMAGE}:${VERSION}" || echo "Failed to tag ${ARCH}"
+            
+            echo "✓ Tagged ${ARCH} with ${VERSION} and latest"
+          done
+          
+          echo "All images tagged successfully!"
+
+      - name: Commit beszel_agent config.yaml version update
+        if: steps.check_version.outputs.run_steps == 'true'
+        run: |
+          git config --global user.name "Developer Insider Bot"
+          git config --global user.email "bot@developerinsider.co"
+          git add beszel_agent/config.yaml
+          
+          # Create appropriate commit message based on trigger type
+          if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
+            git commit -m "Release ${{ github.ref_name }}: Update to Beszel ${VERSION}" || echo "No changes to commit"
+          else
+            git commit -m "Update beszel_agent config version to ${VERSION}" || echo "No changes to commit"
+          fi
+          
+          # Don't push on tag releases (avoid recursion)
+          if [[ "${{ steps.trigger_type.outputs.type }}" != "tag" ]]; then
+            git push
+          else
+            echo "Skipping push for tag-based release"
+          fi
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}     

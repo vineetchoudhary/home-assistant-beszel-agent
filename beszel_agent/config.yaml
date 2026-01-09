@@ -1,0 +1,45 @@
+---
+name: "Beszel Agent"
+description: >-
+  Lightweight server monitoring hub with historical data,
+  docker stats, and alerts
+version: "0.17.0"
+slug: "beszel-agent"
+url: "https://github.com/vineetchoudhary/ha-beszel-agent"
+init: false
+startup: application
+boot: auto
+watchdog: "tcp://[HOST]:45876"
+host_network: true
+docker_api: true
+host_dbus: true
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+ports:
+  45876/tcp: 45876
+image: "ghcr.io/vineetchoudhary/ha-beszel-agent-{arch}"
+options:
+  key: ""
+  hub_url: ""
+  token: ""
+  environment_vars: []
+  custom_volumes: []
+schema:
+  key: password
+  hub_url: str
+  token: password
+  environment_vars:
+    - name: str
+      value: str
+    - list?
+  custom_volumes:
+    - host_path: str
+      container_path: str
+    - list?
+map:
+  - type: addon_config
+    read_only: false

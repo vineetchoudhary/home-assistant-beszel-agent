@@ -1,0 +1,66 @@
+name: Validate Add-on Configuration
+
+on:
+  pull_request:
+    paths:
+      - 'beszel_agent/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'beszel_agent/**'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Add-on
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate config.yaml syntax
+        run: |
+          echo "Validating config.yaml syntax..."
+          if command -v yamllint >/dev/null 2>&1; then
+            yamllint beszel_agent/config.yaml
+          else
+            python3 -c "import yaml; yaml.safe_load(open('beszel_agent/config.yaml'))"
+          fi
+
+      - name: Check required files
+        run: |
+          echo "Checking required files..."
+          required_files=("config.yaml" "Dockerfile" "run.sh" "DOCS.md")
+          for file in "${required_files[@]}"; do
+            if [ ! -f "beszel_agent/$file" ]; then
+              echo "ERROR: Missing required file: beszel_agent/$file"
+              exit 1
+            fi
+            echo "✓ Found: beszel_agent/$file"
+          done
+
+      - name: Validate Dockerfile
+        run: |
+          echo "Validating Dockerfile..."
+          cd beszel_agent
+          docker run --rm -i hadolint/hadolint < Dockerfile || true
+
+      - name: Check shell script syntax
+        run: |
+          echo "Validating shell script syntax..."
+          bash -n beszel_agent/run.sh
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck beszel_agent/run.sh || true
+          fi
+
+      - name: Verify version consistency
+        run: |
+          echo "Checking version consistency..."
+          CONFIG_VERSION=$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')
+          echo "Config version: $CONFIG_VERSION"
+          
+          # Check if version follows semantic versioning
+          if [[ ! "$CONFIG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "WARNING: Version does not follow semantic versioning (X.Y.Z)"
+          fi
