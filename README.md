@@ -14,11 +14,11 @@ Or add it manually:
 - Find "Beszel Agent" in the store and hit Install
 
 ## Documentation
-- Setup and Configuration: [beszel_agent/DOCS.md](beszel_agent/DOCS.md)
-- Testing Instructions: [.github/TESTING.md](.github/TESTING.md)
-- Contributing Guide: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md)
-- Architecture Overview: [.github/ARCHITECTURE.md](.github/ARCHITECTURE.md)
-- Release Process: [.github/RELEASE.md](.github/RELEASE.md)
+- [Setup and Configuration](beszel_agent/DOCS.md)
+- [Testing Instructions](.github/TESTING.md)
+- [Contributing Guide](.github/CONTRIBUTING.md)
+- [Architecture Overview](.github/ARCHITECTURE.md)
+- [Release Process](.github/RELEASE.md)
 
 ## What's Beszel?
 
