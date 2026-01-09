@@ -104,10 +104,6 @@ if [ ! -f /usr/local/bin/agent ]; then
     die "Beszel Agent binary not found at /usr/local/bin/agent"
 fi
 
-# Display agent version
-AGENT_VERSION=$(/usr/local/bin/agent --version 2>&1 || echo "unknown")
-bashio::log.info "Agent version: ${AGENT_VERSION}"
-
 # Start the Beszel Agent
 bashio::log.info "========================================"
 bashio::log.info "Starting Beszel Agent on port 45876..."

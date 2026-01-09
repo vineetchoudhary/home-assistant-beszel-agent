@@ -54,8 +54,5 @@ RUN set -euo pipefail && \
     rm -rf /tmp/beszel-agent* /tmp/config.yaml && \
     echo "[INFO] Beszel Agent installed successfully"
 
-# Verify installation
-RUN /usr/local/bin/agent --version || echo "[WARN] Could not verify agent version"
-
 # Run the agent
 CMD ["/run.sh"]
