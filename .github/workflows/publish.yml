@@ -87,9 +87,8 @@ jobs:
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
           sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent/config.yaml
-          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}-dev\"/" beszel_agent_dev/config.yaml
-          echo "Updated beszel_agent to version ${{ steps.get_version.outputs.VERSION }}"
-          echo "Updated beszel_agent_dev to version ${{ steps.get_version.outputs.VERSION }}-dev"
+          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent_dev/config.yaml
+          echo "Updated beszel_agent and beszel_agent_dev to version ${{ steps.get_version.outputs.VERSION }}"
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
