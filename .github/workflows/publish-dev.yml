@@ -1,0 +1,89 @@
+name: Build and Publish Dev
+
+on:
+  push:
+    paths:
+      - 'beszel_agent_dev/**'
+      - '.github/workflows/publish-dev.yml'
+  workflow_dispatch:
+
+jobs:
+  build-dev:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - name: Get short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get dev version
+        id: get_version
+        run: |
+          VERSION=$(grep '^version:' beszel_agent_dev/config.yaml | sed -E 's/version: "(.*)"/\1/')
+          echo "Dev version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Dev Image (amd64 & aarch64 - Latest Builder)
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --amd64 \
+            --aarch64 \
+            --target beszel_agent_dev \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Publish Dev Image (armv7, armhf, i386 - Legacy Builder)
+        uses: home-assistant/builder@2025.09.0
+        with:
+          args: |
+            --armv7 \
+            --armhf \
+            --i386 \
+            --target beszel_agent_dev \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Tag images with latest-dev and SHA
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          SHA="${{ steps.vars.outputs.sha_short }}"
+          
+          # List of all supported architectures
+          ARCHS=("aarch64" "amd64" "armv7" "armhf" "i386")
+          
+          echo "Tagging dev images with version ${VERSION}, latest-dev, and SHA ${SHA}..."
+          
+          for ARCH in "${ARCHS[@]}"; do
+            IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-${ARCH}"
+            
+            # Tag with version, latest-dev, and SHA
+            docker buildx imagetools create \
+              "${IMAGE}:latest" \
+              --tag "${IMAGE}:${VERSION}" \
+              --tag "${IMAGE}:latest-dev" \
+              --tag "${IMAGE}:${SHA}" || echo "Failed to tag ${ARCH}"
+            
+            echo "✓ Tagged ${ARCH} with ${VERSION}, latest-dev, and ${SHA}"
+          done
+          
+          echo "All dev images tagged successfully!"
+
+      - name: Print image tags
+        run: |
+          echo "Dev images published with tags:"
+          echo "  - :${{ steps.get_version.outputs.VERSION }}"
+          echo "  - :latest-dev"
+          echo "  - :${{ steps.vars.outputs.sha_short }}"
