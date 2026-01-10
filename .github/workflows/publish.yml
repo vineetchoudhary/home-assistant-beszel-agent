@@ -104,10 +104,6 @@ jobs:
             --target beszel_agent \
             --docker-hub ghcr.io/vineetchoudhary
 
-      - name: Use default docker builder for tagging
-        if: steps.check_version.outputs.run_steps == 'true'
-        run: docker buildx use default || true
-
       - name: Tag images with latest
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
@@ -121,10 +117,14 @@ jobs:
           for ARCH in "${ARCHS[@]}"; do
             IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-${ARCH}"
             
+            # Pull the latest image
+            docker pull "${IMAGE}:latest"
+            
             # Tag with version
-            docker buildx imagetools create \
-              "${IMAGE}:latest" \
-              --tag "${IMAGE}:${VERSION}" || echo "Failed to tag ${ARCH}"
+            docker tag "${IMAGE}:latest" "${IMAGE}:${VERSION}"
+            
+            # Push version tag
+            docker push "${IMAGE}:${VERSION}"
             
             echo "✓ Tagged ${ARCH} with ${VERSION} and latest"
           done
