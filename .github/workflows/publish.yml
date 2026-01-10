@@ -67,6 +67,9 @@ jobs:
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
           sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent/config.yaml
+          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}-dev\"/" beszel_agent_dev/config.yaml
+          echo "Updated beszel_agent to version ${{ steps.get_version.outputs.VERSION }}"
+          echo "Updated beszel_agent_dev to version ${{ steps.get_version.outputs.VERSION }}-dev"
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
@@ -127,13 +130,13 @@ jobs:
         run: |
           git config --global user.name "Developer Insider Bot"
           git config --global user.email "bot@developerinsider.co"
-          git add beszel_agent/config.yaml
+          git add beszel_agent/config.yaml beszel_agent_dev/config.yaml
           
           # Create appropriate commit message based on trigger type
           if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
             git commit -m "Release ${{ github.ref_name }}: Update to Beszel ${VERSION}" || echo "No changes to commit"
           else
-            git commit -m "Update beszel_agent config version to ${VERSION}" || echo "No changes to commit"
+            git commit -m "Update config versions to Beszel ${VERSION}" || echo "No changes to commit"
           fi
           
           # Don't push on tag releases (avoid recursion)
