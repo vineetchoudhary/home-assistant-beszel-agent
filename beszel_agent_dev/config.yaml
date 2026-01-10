@@ -1,6 +1,6 @@
 name: "Beszel Agent (dev)"
 description: "Development version of Beszel Agent Add-on for Home Assistant"
-version: "0.16.0"
+version: "0.17.0-dev"
 slug: "beszel-agent-dev"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent/tree/dev"
 init: false
