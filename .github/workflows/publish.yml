@@ -115,7 +115,7 @@ jobs:
           if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
             git commit -m "Release ${{ github.ref_name }}: Update to Beszel ${VERSION}" || echo "No changes to commit"
           else
-            git commit -m "Update config versions to Beszel ${VERSION}" || echo "No changes to commit"
+            git commit -m "Update to Beszel ${VERSION}" || echo "No changes to commit"
           fi
           
           # Don't push on tag releases (avoid recursion)
@@ -125,4 +125,44 @@ jobs:
             echo "Skipping push for tag-based release"
           fi
         env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}     
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+
+      - name: Create Git Tag
+        if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag'
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAG="v${VERSION}"
+          
+          git tag -a "${TAG}" -m "Release ${TAG}: Update to Beszel ${VERSION}"
+          git push origin "${TAG}"
+          
+          echo "Created and pushed tag: ${TAG}"
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+
+      - name: Create GitHub Release
+        if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          release_name: Release v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Beszel Agent v${{ steps.get_version.outputs.VERSION }}
+            
+            Updated to Beszel version ${{ steps.get_version.outputs.VERSION }}
+            
+            ### Changes
+            - Updated Beszel Agent to version ${{ steps.get_version.outputs.VERSION }}
+            - Updated Dev version to ${{ steps.get_version.outputs.VERSION }}-dev
+            
+            ### Images
+            All architectures (amd64, aarch64, armv7, armhf, i386) have been built and published to GHCR.
+            
+            **Stable**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}:${{ steps.get_version.outputs.VERSION }}`
+            **Dev**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}:${{ steps.get_version.outputs.VERSION }}-dev`
+            
+            For more information about this Beszel release, see: https://github.com/henrygd/beszel/releases/tag/v${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
