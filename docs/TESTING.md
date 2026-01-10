@@ -70,18 +70,18 @@ Save this as `test-addon.sh`:
 ```bash
 #!/bin/bash
 
-echo \"🧪 Testing Beszel Agent...\"
+echo "🪪 Testing Beszel Agent..."
 
-echo \"✓ Checking YAML...\"
-python3 -c \"import yaml; yaml.safe_load(open('beszel_agent/config.yaml'))\" || exit 1
+echo "✓ Checking YAML..."
+python3 -c "import yaml; yaml.safe_load(open('beszel_agent/config.yaml'))" || exit 1
 
-echo \"✓ Checking shell script...\"
+echo "✓ Checking shell script..."
 bash -n beszel_agent/run.sh || exit 1
 
-echo \"✓ Looking for required files...\"
+echo "✓ Looking for required files..."
 for file in config.yaml Dockerfile run.sh DOCS.md; do
-  if [ ! -f \"beszel_agent/$file\" ]; then
-    echo \"❌ Missing: $file\"
+  if [ ! -f "beszel_agent/$file" ]; then
+    echo "❌ Missing: $file"
     exit 1
   fi
   echo "  - beszel_agent/$file"

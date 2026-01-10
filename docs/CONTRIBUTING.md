@@ -28,7 +28,7 @@ Before you submit:
 3. Check the logs for errors
 4. Test on different architectures if you can
 
-Test instructions are [here](.github/TESTING.md).
+Test instructions are [here](TESTING.md).
 
 
 ## Questions?

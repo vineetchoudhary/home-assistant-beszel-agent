@@ -15,10 +15,10 @@ Or add it manually:
 
 ## Documentation
 - [Setup and Configuration](beszel_agent/DOCS.md)
-- [Testing Instructions](.github/TESTING.md)
-- [Contributing Guide](.github/CONTRIBUTING.md)
-- [Architecture Overview](.github/ARCHITECTURE.md)
-- [Release Process](.github/RELEASE.md)
+- [Testing Instructions](docs/TESTING.md)
+- [Contributing Guide](docs/CONTRIBUTING.md)
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Release Process](docs/RELEASE.md)
 
 ## What's Beszel?
 
