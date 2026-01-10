@@ -173,13 +173,12 @@ jobs:
             
             ### Changes
             - Updated Beszel Agent to version ${{ steps.get_version.outputs.VERSION }}
-            - Updated Dev version to ${{ steps.get_version.outputs.VERSION }}-dev
             
             ### Images
             All architectures (amd64, aarch64, armv7, armhf, i386) have been built and published to GHCR.
             
             **Stable**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}:${{ steps.get_version.outputs.VERSION }}`
-            **Dev**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}:${{ steps.get_version.outputs.VERSION }}-dev`
+            **Dev**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}:${{ steps.get_version.outputs.VERSION }}`
             
             For more information about this Beszel release, see: https://github.com/henrygd/beszel/releases/tag/v${{ steps.get_version.outputs.VERSION }}
           draft: false
