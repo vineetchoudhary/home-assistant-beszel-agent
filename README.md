@@ -15,6 +15,7 @@ Or add it manually:
 
 ## Documentation
 - [Setup and Configuration](beszel_agent/DOCS.md)
+- [Step by Step Setup and Configuration Guide with Screenshots](docs/INSTALLATION.md)
 - [Testing Instructions](docs/TESTING.md)
 - [Contributing Guide](docs/CONTRIBUTING.md)
 - [Architecture Overview](docs/ARCHITECTURE.md)
