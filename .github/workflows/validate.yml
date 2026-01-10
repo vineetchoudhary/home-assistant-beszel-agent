@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'beszel_agent/**'
+      - 'beszel_agent_dev/**'
   push:
     branches:
       - main
     paths:
       - 'beszel_agent/**'
+      - 'beszel_agent_dev/**'
   workflow_dispatch:
 
 jobs:
@@ -22,45 +24,67 @@ jobs:
       - name: Validate config.yaml syntax
         run: |
           echo "Validating config.yaml syntax..."
-          if command -v yamllint >/dev/null 2>&1; then
-            yamllint -d '{rules: {document-start: disable}}' beszel_agent/config.yaml
-          else
-            python3 -c "import yaml; yaml.safe_load(open('beszel_agent/config.yaml'))"
-          fi
+          for addon in beszel_agent beszel_agent_dev; do
+            echo "Checking ${addon}/config.yaml..."
+            if command -v yamllint >/dev/null 2>&1; then
+              yamllint -d '{rules: {document-start: disable}}' ${addon}/config.yaml
+            else
+              python3 -c "import yaml; yaml.safe_load(open('${addon}/config.yaml'))"
+            fi
+            echo "✓ ${addon}/config.yaml is valid"
+          done
 
       - name: Check required files
         run: |
           echo "Checking required files..."
           required_files=("config.yaml" "Dockerfile" "run.sh" "DOCS.md")
-          for file in "${required_files[@]}"; do
-            if [ ! -f "beszel_agent/$file" ]; then
-              echo "ERROR: Missing required file: beszel_agent/$file"
-              exit 1
-            fi
-            echo "✓ Found: beszel_agent/$file"
+          for addon in beszel_agent beszel_agent_dev; do
+            echo "Checking ${addon}..."
+            for file in "${required_files[@]}"; do
+              if [ ! -f "${addon}/$file" ]; then
+                echo "ERROR: Missing required file: ${addon}/$file"
+                exit 1
+              fi
+              echo "✓ Found: ${addon}/$file"
+            done
           done
 
       - name: Validate Dockerfile
         run: |
           echo "Validating Dockerfile..."
-          cd beszel_agent
-          docker run --rm -i hadolint/hadolint < Dockerfile || true
+          for addon in beszel_agent beszel_agent_dev; do
+            echo "Checking ${addon}/Dockerfile..."
+            cd ${addon}
+            docker run --rm -i hadolint/hadolint < Dockerfile || true
+            cd ..
+          done
 
       - name: Check shell script syntax
         run: |
           echo "Validating shell script syntax..."
-          bash -n beszel_agent/run.sh
-          if command -v shellcheck >/dev/null 2>&1; then
-            shellcheck beszel_agent/run.sh || true
-          fi
+          for addon in beszel_agent beszel_agent_dev; do
+            echo "Checking ${addon}/run.sh..."
+            bash -n ${addon}/run.sh
+            if command -v shellcheck >/dev/null 2>&1; then
+              shellcheck ${addon}/run.sh || true
+            fi
+            echo "✓ ${addon}/run.sh syntax is valid"
+          done
 
       - name: Verify version consistency
         run: |
           echo "Checking version consistency..."
-          CONFIG_VERSION=$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')
-          echo "Config version: $CONFIG_VERSION"
           
-          # Check if version follows semantic versioning
+          # Check beszel_agent
+          CONFIG_VERSION=$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')
+          echo "beszel_agent version: $CONFIG_VERSION"
           if [[ ! "$CONFIG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "WARNING: Version does not follow semantic versioning (X.Y.Z)"
+            echo "WARNING: beszel_agent version does not follow semantic versioning (X.Y.Z)"
+          fi
+          
+          # Check beszel_agent_dev
+          CONFIG_VERSION_DEV=$(grep '^version:' beszel_agent_dev/config.yaml | sed -E 's/version: "(.*)"/\1/')
+          echo "beszel_agent_dev version: $CONFIG_VERSION_DEV"
+          if [[ ! "$CONFIG_VERSION_DEV" =~ ^[0-9]+\.[0-9]+\.[0-9]+-dev$ ]]; then
+            echo "WARNING: beszel_agent_dev version should follow format X.Y.Z-dev"
           fi
