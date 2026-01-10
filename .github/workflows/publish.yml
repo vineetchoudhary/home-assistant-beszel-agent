@@ -42,7 +42,25 @@ jobs:
       - name: Get latest release version
         id: get_version
         run: |
-          VERSION=$(curl -s https://api.github.com/repos/henrygd/beszel/releases/latest | jq -r .tag_name)
+          # Use GitHub token to avoid rate limiting
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/henrygd/beszel/releases/latest)
+          
+          # Check if response is valid JSON
+          if ! echo "$RESPONSE" | jq . >/dev/null 2>&1; then
+            echo "Error: Failed to fetch release info from GitHub API"
+            echo "$RESPONSE"
+            exit 1
+          fi
+          
+          VERSION=$(echo "$RESPONSE" | jq -r .tag_name)
+          
+          # Check if we got a valid version
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Error: Could not extract version from API response"
+            exit 1
+          fi
+          
           VERSION=$(echo "$VERSION" | sed 's/^v//')
           echo "Latest Beszel version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
