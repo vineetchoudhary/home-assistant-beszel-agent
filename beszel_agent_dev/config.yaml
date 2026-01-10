@@ -1,0 +1,41 @@
+name: "Beszel Agent (dev)"
+description: "Development version of Beszel Agent Add-on for Home Assistant"
+version: "0.17.0-dev"
+slug: "beszel-agent-dev"
+url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent/tree/dev"
+init: false
+startup: application
+boot: auto
+watchdog: "tcp://[HOST]:45876"
+host_network: true
+docker_api: true
+host_dbus: true
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+ports:
+  45876/tcp: 45876
+image: "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}"
+options:
+  key: ""
+  hub_url: ""
+  token: ""
+  environment_vars: []
+  custom_volumes: []
+schema:
+  key: password
+  hub_url: str
+  token: password
+  environment_vars:
+    - name: str
+      value: str
+  custom_volumes:
+    - host_path: str
+      container_path: str
+map:
+  - type: data
+    read_only: false
+    path: /var/lib/beszel-agent
