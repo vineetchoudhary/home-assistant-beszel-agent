@@ -36,5 +36,6 @@ schema:
     - host_path: str
       container_path: str
 map:
-  - type: addon_config
+  - type: data
     read_only: false
+    path: /var/lib/beszel-agent
