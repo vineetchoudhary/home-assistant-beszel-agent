@@ -104,33 +104,6 @@ jobs:
             --target beszel_agent \
             --docker-hub ghcr.io/vineetchoudhary
 
-      - name: Tag images with latest
-        if: steps.check_version.outputs.run_steps == 'true'
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          
-          # List of all supported architectures
-          ARCHS=("aarch64" "amd64" "armv7" "armhf" "i386")
-          
-          echo "Tagging images with version ${VERSION} and latest..."
-          
-          for ARCH in "${ARCHS[@]}"; do
-            IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-${ARCH}"
-            
-            # Pull the latest image
-            docker pull "${IMAGE}:latest"
-            
-            # Tag with version
-            docker tag "${IMAGE}:latest" "${IMAGE}:${VERSION}"
-            
-            # Push version tag
-            docker push "${IMAGE}:${VERSION}"
-            
-            echo "✓ Tagged ${ARCH} with ${VERSION} and latest"
-          done
-          
-          echo "All images tagged successfully!"
-
       - name: Commit beszel_agent config.yaml version update
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
