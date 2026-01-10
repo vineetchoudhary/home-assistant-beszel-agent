@@ -56,6 +56,35 @@ jobs:
             --target beszel_agent_dev \
             --docker-hub ghcr.io/vineetchoudhary
 
+      - name: Tag images with latest-dev and SHA
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          SHA="${{ steps.vars.outputs.sha_short }}"
+          
+          # List of all supported architectures
+          ARCHS=("aarch64" "amd64" "armv7" "armhf" "i386")
+          
+          echo "Tagging dev images with latest-dev, and SHA ${SHA}..."
+          
+          for ARCH in "${ARCHS[@]}"; do
+            IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-${ARCH}"
+            
+            # Pull the latest image
+            docker pull "${IMAGE}:latest"
+            
+            # Tag with version, latest-dev, and SHA
+            docker tag "${IMAGE}:latest" "${IMAGE}:latest-dev"
+            docker tag "${IMAGE}:latest" "${IMAGE}:${SHA}"
+            
+            # Push all tags
+            docker push "${IMAGE}:latest-dev"
+            docker push "${IMAGE}:${SHA}"
+            
+            echo "✓ Tagged ${ARCH} with latest-dev, and ${SHA}"
+          done
+          
+          echo "All dev images tagged successfully!"
+
       - name: Print image tags
         run: |
           echo "Dev images published with tags:"
