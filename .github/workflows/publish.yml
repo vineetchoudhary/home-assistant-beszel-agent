@@ -82,7 +82,26 @@ jobs:
             echo "Version is outdated. Proceeding with updates."
             echo "run_steps=true" >> $GITHUB_OUTPUT
           fi
-
+      - name: Get latest stable release version from this repository
+        id: get_stable_version
+        if: always()
+        run: |
+          # Fetch the latest stable release from this repository
+          RESPONSE=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+          
+          LATEST_RELEASE=$(echo "$RESPONSE" | jq -r .tag_name)
+          
+          if [ -n "${LATEST_RELEASE}" ] && [ "${LATEST_RELEASE}" != "null" ]; then
+            LATEST_VERSION=$(echo "${LATEST_RELEASE}" | sed 's/^v//')
+            echo "Latest stable release: ${LATEST_VERSION}"
+            echo "VERSION=${LATEST_VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "No stable release found"
+            echo "VERSION=" >> $GITHUB_OUTPUT
+          fi
       - name: Update version in beszel_agent config file
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
@@ -211,24 +230,43 @@ jobs:
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           PACKAGE_NAME="home-assistant-beszel-agent-amd64"
+          IMAGE="ghcr.io/vineetchoudhary/${PACKAGE_NAME}"
           
           echo "Deleting test image with version ${VERSION} from registry..."
           
-          # Get all versions and find the one with our version tag
+          # Get all versions from registry
           VERSIONS=$(curl -s \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions")
           
-          # Find version ID that has the version tag but not latest tag
-          VERSION_ID=$(echo "${VERSIONS}" | jq -r ".[] | select(.metadata.container.tags[] | select(. == \"${VERSION}\")) | select(.metadata.container.tags | contains([\"latest\"]) | not) | .id" | head -n 1)
+          # Find the test image version ID (has the version tag)
+          VERSION_ID=$(echo "${VERSIONS}" | jq -r ".[] | select(.metadata.container.tags[] | select(. == \"${VERSION}\")) | .id" | head -n 1)
           
           if [ -n "${VERSION_ID}" ] && [ "${VERSION_ID}" != "null" ]; then
+            # Delete the test image version
             curl -X DELETE \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
             echo "Deleted test image version ${VERSION_ID}"
+            
+            # Restore latest tag from stable release
+            STABLE_VERSION="${{ steps.get_stable_version.outputs.VERSION }}"
+            if [ -n "${STABLE_VERSION}" ]; then
+              echo "Restoring 'latest' tag to stable version: ${STABLE_VERSION}"
+              
+              # Pull the stable release version and tag as latest
+              if docker pull "${IMAGE}:${STABLE_VERSION}" 2>/dev/null; then
+                docker tag "${IMAGE}:${STABLE_VERSION}" "${IMAGE}:latest"
+                docker push "${IMAGE}:latest"
+                echo "Restored 'latest' tag to version ${STABLE_VERSION}"
+              else
+                echo "Could not pull version ${STABLE_VERSION} - latest tag not restored"
+              fi
+            else
+              echo "No stable release found - latest tag not restored"
+            fi
           else
             echo "Test image already removed or not found"
           fi
