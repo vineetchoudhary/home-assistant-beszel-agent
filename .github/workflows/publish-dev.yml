@@ -23,12 +23,38 @@ jobs:
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Get dev version
+      - name: Get latest release version from Beszel
         id: get_version
         run: |
-          VERSION=$(grep '^version:' beszel_agent_dev/config.yaml | sed -E 's/version: "(.*)"/\1/')
-          echo "Dev version: $VERSION"
+          # Use GitHub token to avoid rate limiting
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/henrygd/beszel/releases/latest)
+          
+          # Check if response is valid JSON
+          if ! echo "$RESPONSE" | jq . >/dev/null 2>&1; then
+            echo "Error: Failed to fetch release info from GitHub API"
+            echo "$RESPONSE"
+            exit 1
+          fi
+          
+          VERSION=$(echo "$RESPONSE" | jq -r .tag_name)
+          
+          # Check if we got a valid version
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Error: Could not extract version from API response"
+            exit 1
+          fi
+          
+          VERSION=$(echo "$VERSION" | sed 's/^v//')
+          echo "Latest Beszel version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version in beszel_agent_dev config file
+        run: |
+          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent_dev/config.yaml
+          echo "Updated beszel_agent_dev to version ${{ steps.get_version.outputs.VERSION }}"
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
@@ -114,37 +140,12 @@ jobs:
             exit 1
           fi
 
-      - name: Delete test image from registry
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          PACKAGE_NAME="home-assistant-beszel-agent-dev-amd64"
-          
-          echo "Deleting test image with version ${VERSION} from registry..."
-          
-          # Get all versions and find the one with our version tag
-          VERSIONS=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions")
-          
-          # Find version ID that has the version tag but not latest tag
-          VERSION_ID=$(echo "${VERSIONS}" | jq -r ".[] | select(.metadata.container.tags[] | select(. == \"${VERSION}\")) | select(.metadata.container.tags | contains([\"latest\"]) | not) | .id" | head -n 1)
-          
-          if [ -n "${VERSION_ID}" ] && [ "${VERSION_ID}" != "null" ]; then
-            curl -X DELETE \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
-            echo "Deleted test image version ${VERSION_ID}"
-          else
-            echo "Test image already removed or not found"
-          fi
-
       - name: Publish Remaining Architectures (aarch64 - Latest Builder)
         uses: home-assistant/builder@master
         with:
           args: |
             --aarch64 \
+            --amd64 \
             --target beszel_agent_dev \
             --docker-hub ghcr.io/vineetchoudhary
 
@@ -186,6 +187,17 @@ jobs:
           done
           
           echo "All dev images tagged successfully!"
+
+      - name: Commit beszel_agent_dev config.yaml version update
+        run: |
+          git config --global user.name "Developer Insider Bot"
+          git config --global user.email "bot@developerinsider.co"
+          git add beszel_agent_dev/config.yaml
+          
+          git commit -m "Update dev to Beszel ${VERSION}" || echo "No changes to commit"
+          git push
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Print image tags
         run: |
