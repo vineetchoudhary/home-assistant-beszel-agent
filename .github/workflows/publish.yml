@@ -121,6 +121,76 @@ jobs:
             --target beszel_agent \
             --docker-hub ghcr.io/vineetchoudhary
 
+      - name: Test Beszel Agent Image (Stable)
+        if: steps.check_version.outputs.run_steps == 'true'
+        run: |
+          echo "Testing stable beszel_agent image..."
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-amd64:${VERSION}"
+          
+          # Pull the image
+          docker pull "${IMAGE}"
+          
+          # Run the container with minimal config (it should start without errors)
+          CONTAINER_ID=$(docker run -d \
+            -e PORT=45876 \
+            -e KEY=test-key-for-ci \
+            "${IMAGE}")
+          
+          echo "Container ID: ${CONTAINER_ID}"
+          
+          # Wait for container to initialize
+          sleep 10
+          
+          # Check if container is still running
+          if docker ps -q -f id="${CONTAINER_ID}" | grep -q .; then
+            echo "✓ Container is running successfully"
+            docker logs "${CONTAINER_ID}"
+            docker stop "${CONTAINER_ID}"
+            docker rm "${CONTAINER_ID}"
+            echo "✓ Test passed for stable image"
+          else
+            echo "✗ Container failed to run"
+            docker logs "${CONTAINER_ID}"
+            docker rm "${CONTAINER_ID}"
+            exit 1
+          fi
+
+      - name: Test Beszel Agent Dev Image
+        if: steps.check_version.outputs.run_steps == 'true'
+        run: |
+          echo "Testing dev beszel_agent image..."
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-amd64:${VERSION}"
+          
+          # Pull the image
+          docker pull "${IMAGE}"
+          
+          # Run the container with minimal config (it should start without errors)
+          CONTAINER_ID=$(docker run -d \
+            -e PORT=45876 \
+            -e KEY=test-key-for-ci \
+            "${IMAGE}")
+          
+          echo "Container ID: ${CONTAINER_ID}"
+          
+          # Wait for container to initialize
+          sleep 10
+          
+          # Check if container is still running
+          if docker ps -q -f id="${CONTAINER_ID}" | grep -q .; then
+            echo "✓ Container is running successfully"
+            docker logs "${CONTAINER_ID}"
+            docker stop "${CONTAINER_ID}"
+            docker rm "${CONTAINER_ID}"
+            echo "✓ Test passed for dev image"
+          else
+            echo "✗ Container failed to run"
+            docker logs "${CONTAINER_ID}"
+            docker rm "${CONTAINER_ID}"
+            exit 1
+          fi
+
       - name: Commit beszel_agent config.yaml version update
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
