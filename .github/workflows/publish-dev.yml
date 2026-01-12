@@ -37,30 +37,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish Dev Image (amd64 & aarch64 - Latest Builder)
+      - name: Build and Tag amd64 Dev Test Image
         uses: home-assistant/builder@master
         with:
           args: |
             --amd64 \
-            --aarch64 \
             --target beszel_agent_dev \
             --docker-hub ghcr.io/vineetchoudhary
 
-      - name: Publish Dev Image (armv7, armhf, i386 - Legacy Builder)
-        uses: home-assistant/builder@2025.09.0
-        with:
-          args: |
-            --armv7 \
-            --armhf \
-            --i386 \
-            --target beszel_agent_dev \
-            --docker-hub ghcr.io/vineetchoudhary
+      - name: Retag and push only latest-test
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-amd64"
+          
+          # Pull the versioned image
+          docker pull "${IMAGE}:${VERSION}"
+          
+          # Tag as latest-test
+          docker tag "${IMAGE}:${VERSION}" "${IMAGE}:latest-test"
+          
+          # Push only latest-test tag
+          docker push "${IMAGE}:latest-test"
+          
+          # Remove the version tag from local
+          docker rmi "${IMAGE}:${VERSION}" || true
+          
+          echo "Pushed ${IMAGE}:latest-test (version tag will be created later after tests pass)"
 
       - name: Test Beszel Agent Dev Image
         run: |
           echo "Testing dev beszel_agent image..."
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-amd64:${VERSION}"
+          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-amd64:latest-test"
           
           # Pull the image
           docker pull "${IMAGE}"
@@ -68,7 +75,7 @@ jobs:
           # Run the container with test environment variables
           CONTAINER_ID=$(docker run -d \
             -e BESZEL_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@github-actions" \
-            -e BESZEL_HUB_URL="http://test.example.com" \
+            -e BESZEL_HUB_URL="http://0.0.0.0" \
             -e BESZEL_TOKEN="test-token-for-ci" \
             "${IMAGE}")
           
@@ -88,6 +95,15 @@ jobs:
             if echo "${LOGS}" | grep -q "Using KEY from environment variable (test mode)"; then
               echo "✓ Container using test mode configuration"
             fi
+            if echo "${LOGS}" | grep -q "Hub URL: http://0.0.0.0"; then
+              echo "✓ Hub URL configured correctly"
+            fi
+            if echo "${LOGS}" | grep -q "Starting Beszel Agent on port 45876"; then
+              echo "✓ Agent started on port 45876"
+            fi
+            if echo "${LOGS}" | grep -q "Data directory path=/var/lib/beszel-agent"; then
+              echo "✓ Data directory initialized"
+            fi
             # Container should be running (or trying to connect to test hub)
             docker stop "${CONTAINER_ID}" 2>/dev/null || true
             docker rm "${CONTAINER_ID}"
@@ -97,6 +113,50 @@ jobs:
             docker rm "${CONTAINER_ID}"
             exit 1
           fi
+
+      - name: Delete test image from registry
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          PACKAGE_NAME="home-assistant-beszel-agent-dev-amd64"
+          
+          echo "Deleting test image with version ${VERSION} from registry..."
+          
+          # Get all versions and find the one with our version tag
+          VERSIONS=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions")
+          
+          # Find version ID that has the version tag but not latest tag
+          VERSION_ID=$(echo "${VERSIONS}" | jq -r ".[] | select(.metadata.container.tags[] | select(. == \"${VERSION}\")) | select(.metadata.container.tags | contains([\"latest\"]) | not) | .id" | head -n 1)
+          
+          if [ -n "${VERSION_ID}" ] && [ "${VERSION_ID}" != "null" ]; then
+            curl -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
+            echo "Deleted test image version ${VERSION_ID}"
+          else
+            echo "Test image already removed or not found"
+          fi
+
+      - name: Publish Remaining Architectures (aarch64 - Latest Builder)
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --aarch64 \
+            --target beszel_agent_dev \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Publish Dev Image (armv7, armhf, i386 - Legacy Builder)
+        uses: home-assistant/builder@2025.09.0
+        with:
+          args: |
+            --armv7 \
+            --armhf \
+            --i386 \
+            --target beszel_agent_dev \
+            --docker-hub ghcr.io/vineetchoudhary
 
       - name: Tag images with latest-dev and SHA
         run: |
