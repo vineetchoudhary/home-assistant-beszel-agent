@@ -155,6 +155,13 @@ jobs:
           echo "Container logs:"
           echo "${LOGS}"
           
+          # Check container exit code
+          CONTAINER_STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
+          EXIT_CODE=$(docker inspect "${CONTAINER_ID}" --format='{{.State.ExitCode}}')
+          
+          echo "Container status: ${CONTAINER_STATUS}"
+          echo "Container exit code: ${EXIT_CODE}"
+          
           # Check if container started correctly with test mode
           if echo "${LOGS}" | grep -q "Starting Beszel Agent"; then
             echo "✓ Container started successfully"
@@ -170,6 +177,25 @@ jobs:
             if echo "${LOGS}" | grep -q "Data directory path=/var/lib/beszel-agent"; then
               echo "✓ Data directory initialized"
             fi
+            
+            # Check for binary execution errors
+            if echo "${LOGS}" | grep -q "cannot execute: required file not found"; then
+              echo "✗ Agent binary execution failed - architecture or library mismatch"
+              docker stop "${CONTAINER_ID}" 2>/dev/null || true
+              docker rm "${CONTAINER_ID}"
+              exit 1
+            fi
+            
+            # Verify agent is actually running (not just logs printed)
+            if [ "${CONTAINER_STATUS}" = "running" ]; then
+              echo "✓ Container is still running - agent process started successfully"
+            else
+              echo "✗ Container exited with code ${EXIT_CODE}"
+              docker stop "${CONTAINER_ID}" 2>/dev/null || true
+              docker rm "${CONTAINER_ID}"
+              exit 1
+            fi
+            
             # Container should be running (or trying to connect to test hub)
             docker stop "${CONTAINER_ID}" 2>/dev/null || true
             docker rm "${CONTAINER_ID}"
