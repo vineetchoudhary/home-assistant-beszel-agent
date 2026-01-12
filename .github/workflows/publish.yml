@@ -207,7 +207,7 @@ jobs:
           fi
 
       - name: Delete test image from registry
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: always() && steps.check_version.outputs.run_steps == 'true'
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           PACKAGE_NAME="home-assistant-beszel-agent-amd64"

@@ -166,6 +166,33 @@ jobs:
             exit 1
           fi
 
+      - name: Delete test image from registry
+        if: always()
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          PACKAGE_NAME="home-assistant-beszel-agent-dev-amd64"
+          
+          echo "Deleting test image with version ${VERSION} from registry..."
+          
+          # Get all versions and find the one with our version tag
+          VERSIONS=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions")
+          
+          # Find version ID that has the version tag but not latest tag
+          VERSION_ID=$(echo "${VERSIONS}" | jq -r ".[] | select(.metadata.container.tags[] | select(. == \"${VERSION}\")) | select(.metadata.container.tags | contains([\"latest\"]) | not) | .id" | head -n 1)
+          
+          if [ -n "${VERSION_ID}" ] && [ "${VERSION_ID}" != "null" ]; then
+            curl -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
+            echo "Deleted test image version ${VERSION_ID}"
+          else
+            echo "Test image already removed or not found"
+          fi
+
       - name: Publish Remaining Architectures (aarch64 - Latest Builder)
         uses: home-assistant/builder@master
         with:
