@@ -65,12 +65,16 @@ jobs:
           # Pull the image
           docker pull "${IMAGE}"
           
-          # Run the container (it will exit because no Supervisor API, but we check it starts correctly)
-          CONTAINER_ID=$(docker run -d "${IMAGE}")
+          # Run the container with test environment variables
+          CONTAINER_ID=$(docker run -d \
+            -e BESZEL_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@github-actions" \
+            -e BESZEL_HUB_URL="http://test.example.com" \
+            -e BESZEL_TOKEN="test-token-for-ci" \
+            "${IMAGE}")
           
           echo "Container ID: ${CONTAINER_ID}"
           
-          # Wait for container to process startup
+          # Wait for container to initialize
           sleep 5
           
           # Get container logs
@@ -78,13 +82,14 @@ jobs:
           echo "Container logs:"
           echo "${LOGS}"
           
-          # Check if container started correctly and showed expected behavior
+          # Check if container started correctly with test mode
           if echo "${LOGS}" | grep -q "Starting Beszel Agent"; then
             echo "✓ Container started successfully"
-            # Check for expected error (no Supervisor API in test environment)
-            if echo "${LOGS}" | grep -q "Failed to get addon config from Supervisor API"; then
-              echo "✓ Container behaved as expected (missing Supervisor API in test environment)"
+            if echo "${LOGS}" | grep -q "Using KEY from environment variable (test mode)"; then
+              echo "✓ Container using test mode configuration"
             fi
+            # Container should be running (or trying to connect to test hub)
+            docker stop "${CONTAINER_ID}" 2>/dev/null || true
             docker rm "${CONTAINER_ID}"
             echo "✓ Test passed for dev image"
           else

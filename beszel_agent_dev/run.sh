@@ -14,7 +14,12 @@ bashio::log.info "Starting Beszel Agent..."
 bashio::log.info "========================================"
 
 # Get required configuration
-KEY="$(bashio::config 'key')"
+# Try to get from Supervisor API first, fallback to environment variables for testing
+KEY="$(bashio::config 'key' 2>/dev/null || true)"
+if [ -z "$KEY" ] && [ -n "${BESZEL_KEY:-}" ]; then
+    bashio::log.info "Using KEY from environment variable (test mode)"
+    KEY="$BESZEL_KEY"
+fi
 if [ -z "$KEY" ]; then
     die "Configuration error: 'key' is required but not set"
 fi
@@ -24,12 +29,20 @@ if ! [[ "$KEY" =~ ^ssh- ]]; then
     bashio::log.warning "Key does not appear to be a valid SSH public key (should start with 'ssh-')"
 fi
 
-HUB_URL="$(bashio::config 'hub_url')"
+HUB_URL="$(bashio::config 'hub_url' 2>/dev/null || true)"
+if [ -z "$HUB_URL" ] && [ -n "${BESZEL_HUB_URL:-}" ]; then
+    bashio::log.info "Using HUB_URL from environment variable (test mode)"
+    HUB_URL="$BESZEL_HUB_URL"
+fi
 if [ -z "$HUB_URL" ]; then
     die "Configuration error: 'hub_url' is required but not set"
 fi
 
-TOKEN="$(bashio::config 'token')"
+TOKEN="$(bashio::config 'token' 2>/dev/null || true)"
+if [ -z "$TOKEN" ] && [ -n "${BESZEL_TOKEN:-}" ]; then
+    bashio::log.info "Using TOKEN from environment variable (test mode)"
+    TOKEN="$BESZEL_TOKEN"
+fi
 if [ -z "$TOKEN" ]; then
     die "Configuration error: 'token' is required but not set"
 fi
