@@ -233,7 +233,7 @@ jobs:
             echo "Test image already removed or not found"
           fi
 
-      - name: Publish Remaining Architectures (aarch64 - Latest Builder)
+      - name: Publish Dev Image (amd64 & aarch64 - Latest Builder)
         uses: home-assistant/builder@master
         with:
           args: |
