@@ -1,4 +1,4 @@
-name: "Beszel Agent (S.M.A.R.T.)"
+name: "Beszel Agent S.M.A.R.T."
 description: "Beszel Agent Add-on with S.M.A.R.T. Monitoring Support"
 version: "0.18.2"
 slug: "beszel-agent-smart"
