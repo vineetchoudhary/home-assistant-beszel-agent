@@ -2,6 +2,14 @@
 
 Monitor your Home Assistant system with Beszel. Tracks CPU, memory, disk, network, and Docker containers - lightweight and efficient.
 
+## Available Add-ons
+
+This repository provides three add-on variants:
+
+1. **Beszel Agent** - Standard lightweight monitoring
+2. **Beszel Agent Dev** - Development/testing version
+3. **Beszel Agent (S.M.A.R.T.)** - With S.M.A.R.T. disk health monitoring
+
 ## Quick Start
 
 Click this button to add the repository:
@@ -14,12 +22,23 @@ Or add it manually:
 - Find "Beszel Agent" in the store and hit Install
 
 ## Documentation
-- [Setup and Configuration](beszel_agent/DOCS.md)
+- [Beszel Agent - Setup and Configuration](beszel_agent/DOCS.md)
+- [Beszel Agent S.M.A.R.T. - Setup with S.M.A.R.T. Monitoring](beszel_agent_smart/DOCS.md)
 - [Step by Step Setup and Configuration Guide with Screenshots](docs/INSTALLATION.md)
 - [Testing Instructions](docs/TESTING.md)
 - [Contributing Guide](docs/CONTRIBUTING.md)
 - [Architecture Overview](docs/ARCHITECTURE.md)
 - [Release Process](docs/RELEASE.md)
+
+## Which Version Should I Use?
+
+**Use Beszel Agent (S.M.A.R.T.) if:**
+- You want to monitor disk health (temperature, wear, errors)
+- You need S.M.A.R.T. data from your drives
+
+**Use Beszel Agent (Standard) if:**
+- You just need basic system monitoring
+- You want the smallest image size
 
 ## What's Beszel?
 

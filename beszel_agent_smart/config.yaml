@@ -1,0 +1,44 @@
+name: "Beszel Agent (S.M.A.R.T.)"
+description: "Beszel Agent Add-on with S.M.A.R.T. Monitoring Support"
+version: "0.18.2"
+slug: "beszel-agent-smart"
+url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
+init: false
+startup: application
+boot: auto
+watchdog: "tcp://[HOST]:45876"
+host_network: true
+docker_api: true
+host_dbus: true
+privileged:
+  - SYS_RAWIO
+  - SYS_ADMIN
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+ports:
+  45876/tcp: 45876
+image: "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart-{arch}"
+options:
+  key: ""
+  hub_url: ""
+  token: ""
+  environment_vars: []
+  custom_volumes: []
+schema:
+  key: password
+  hub_url: str
+  token: password
+  environment_vars:
+    - name: str
+      value: str
+  custom_volumes:
+    - host_path: str
+      container_path: str
+map:
+  - type: data
+    read_only: false
+    path: /var/lib/beszel-agent

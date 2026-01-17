@@ -107,7 +107,8 @@ jobs:
         run: |
           sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent/config.yaml
           sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent_dev/config.yaml
-          echo "Updated beszel_agent and beszel_agent_dev to version ${{ steps.get_version.outputs.VERSION }}"
+          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent_smart/config.yaml
+          echo "Updated beszel_agent, beszel_agent_dev, and beszel_agent_smart to version ${{ steps.get_version.outputs.VERSION }}"
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
@@ -292,12 +293,33 @@ jobs:
             --target beszel_agent \
             --docker-hub ghcr.io/vineetchoudhary
 
+      - name: Publish S.M.A.R.T. Image (amd64 & aarch64 - Latest Builder)
+        if: steps.check_version.outputs.run_steps == 'true'
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --amd64 \
+            --aarch64 \
+            --target beszel_agent_smart \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Publish S.M.A.R.T. Image (armv7, armhf, i386 - Legacy Builder)
+        if: steps.check_version.outputs.run_steps == 'true'
+        uses: home-assistant/builder@2025.09.0
+        with:
+          args: |
+            --armv7 \
+            --armhf \
+            --i386 \
+            --target beszel_agent_smart \
+            --docker-hub ghcr.io/vineetchoudhary
+
       - name: Commit beszel_agent config.yaml version update
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
           git config --global user.name "Developer Insider Bot"
           git config --global user.email "bot@developerinsider.co"
-          git add beszel_agent/config.yaml beszel_agent_dev/config.yaml
+          git add beszel_agent/config.yaml beszel_agent_dev/config.yaml beszel_agent_smart/config.yaml
           
           # Create appropriate commit message based on trigger type
           if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
@@ -349,6 +371,7 @@ jobs:
             
             **Stable**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}:${{ steps.get_version.outputs.VERSION }}`
             **Dev**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}:${{ steps.get_version.outputs.VERSION }}`
+            **S.M.A.R.T.**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart-{arch}:${{ steps.get_version.outputs.VERSION }}`
             
             For more information about this Beszel release, see: https://github.com/henrygd/beszel/releases/tag/v${{ steps.get_version.outputs.VERSION }}
           draft: false
