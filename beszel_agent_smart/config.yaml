@@ -10,7 +10,7 @@ watchdog: "tcp://[HOST]:45876"
 host_network: true
 docker_api: true
 host_dbus: true
-usb: true
+apparmor: false
 devices:
   - /dev:/dev
 privileged:
