@@ -13,13 +13,11 @@ Lightweight design with built-in smartmontools support.
 
 ## S.M.A.R.T. Monitoring
 
-This variant includes `smartmontools` for disk health monitoring. The add-on uses `full_access` mode to provide necessary permissions for accessing disk S.M.A.R.T. data.
-
-**All disk devices are automatically detected and monitored:**
+This variant includes `smartmontools` for disk health monitoring. The add-on uses `full_access` mode to provide necessary permissions for accessing disk S.M.A.R.T. data. All disk devices are automatically detected and monitored:
 - SATA/SAS drives (`/dev/sd*`)
 - NVMe drives (`/dev/nvme*`)
 
-No manual configuration required. The add-on automatically provides access to all disk devices and Beszel Agent monitors all drives with S.M.A.R.T. capabilities.
+No manual configuration required. You need to **disable the Protection mode** to allow the add-on to access disk devices for S.M.A.R.T. data. The add-on automatically provides access to all disk devices and Beszel Agent monitors all drives with S.M.A.R.T. capabilities.
 
 ### Verify S.M.A.R.T. Detection
 
@@ -32,11 +30,7 @@ Available drives detected:
   - /dev/sda
 ```
 
-Your Beszel Hub will automatically display S.M.A.R.T. data for all detected drives.
-
-Your Beszel Hub will automatically display S.M.A.R.T. data for monitored drives.
-
-**Learn more:** https://www.beszel.dev/guide/smart-data
+Your Beszel Hub will automatically display S.M.A.R.T. data for all detected drives. Learn more: https://www.beszel.dev/guide/smart-data
 
 ## Setup
 
@@ -49,7 +43,7 @@ Your Beszel Hub will automatically display S.M.A.R.T. data for monitored drives.
 
 ### Required Settings
 
-**key** - Your SSH public key
+**key** - SSH public key
 
 Grab this from your Beszel Hub when you're adding a new system to monitor.
 
@@ -57,7 +51,7 @@ Grab this from your Beszel Hub when you're adding a new system to monitor.
 key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample..."
 ```
 
-**hub_url** - Your Beszel Hub URL
+**hub_url** - Beszel Hub URL
 
 Where your Beszel Hub is running.
 
@@ -67,7 +61,7 @@ hub_url: "http://192.168.1.100:8090"
 
 **token** - Authentication token
 
-Get this from your Beszel Hub settings.
+Grab this from your Beszel Hub when you're adding a new system to monitor.
 
 ```yaml
 token: "your-secret-token"
@@ -123,6 +117,14 @@ custom_volumes:
     container_path: /mnt/backup:ro
 ```
 
+### Protection Mode
+
+You nneed to disable Protection mode to allow the add-on to access Docker stats, system info, and disk devices for S.M.A.R.T. data.
+
+1. Open the add-on's **Configuration** tab
+2. Turn off "Protection mode"
+3. Restart the add-on
+
 ## Permissions
 
 This add-on needs some special permissions to work:
@@ -132,16 +134,6 @@ This add-on needs some special permissions to work:
 - **Full Access** - to access disk devices for S.M.A.R.T. data
 
 Don't worry, these are set up automatically when you install.
-
-### Protection Mode
-
-Try it first with default settings. If you see errors or missing container stats:
-
-1. Open the add-on's **Configuration** tab
-2. Turn off "Protection mode"
-3. Restart the add-on
-
-Most users need to disable Protection mode for Docker, D-Bus, and Full Access.
 
 ## Need Help?
 

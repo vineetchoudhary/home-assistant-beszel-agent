@@ -21,7 +21,7 @@ Lightweight design that won't slow down your system.
 
 ### Required Settings
 
-**key** - Your SSH public key
+**key** - SSH public key
 
 Grab this from your Beszel Hub when you're adding a new system to monitor.
 
@@ -29,7 +29,7 @@ Grab this from your Beszel Hub when you're adding a new system to monitor.
 key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample..."
 ```
 
-**hub_url** - Your Beszel Hub URL
+**hub_url** - Beszel Hub URL
 
 Where your Beszel Hub is running.
 
@@ -39,7 +39,7 @@ hub_url: "http://192.168.1.100:8090"
 
 **token** - Authentication token
 
-Get this from your Beszel Hub settings.
+Grab this from your Beszel Hub when you're adding a new system to monitor.
 
 ```yaml
 token: "your-secret-token"
@@ -87,6 +87,14 @@ custom_volumes:
     container_path: "/var/run/dbus/system_bus_socket:ro"
 ```
 
+### Protection Mode
+
+You nneed to disable Protection mode to allow the add-on to access Docker stats and system info.
+
+1. Open the add-on's **Configuration** tab
+2. Turn off "Protection mode"
+3. Restart the add-on
+
 ## Permissions
 
 This add-on needs some special permissions to work:
@@ -95,16 +103,6 @@ This add-on needs some special permissions to work:
 - **Host D-Bus** - to get system info
 
 Don't worry, these are set up automatically when you install.
-
-### Protection Mode
-
-Try it first with default settings. If you see errors or missing container stats:
-
-1. Open the add-on's **Configuration** tab
-2. Turn off "Protection mode"
-3. Restart the add-on
-
-Most users need to disable Protection mode for Docker and D-Bus access.
 
 ## Need Help?
 
