@@ -7,8 +7,8 @@ Monitor your Home Assistant system with Beszel. Tracks CPU, memory, disk, networ
 This repository provides three add-on variants:
 
 1. **Beszel Agent** - Standard lightweight monitoring
-2. **Beszel Agent Dev** - Development/testing version
-3. **Beszel Agent (S.M.A.R.T.)** - With S.M.A.R.T. disk health monitoring
+2. **Beszel Agent (S.M.A.R.T.)** - With S.M.A.R.T. disk health monitoring
+3. **Beszel Agent (Test)** - Development/testing version
 
 ## Quick Start
 

@@ -6,59 +6,33 @@ Monitor your Home Assistant system with Beszel, including **S.M.A.R.T. disk heal
 
 - CPU, memory, disk, and network usage
 - Home Assistant Add-ons (via Docker API)
-- S.M.A.R.T. disk health data (temperature, wear level, errors, etc.)
+- S.M.A.R.T. disk health data
 - Historical data with trends
 
 Lightweight design with built-in smartmontools support.
 
 ## S.M.A.R.T. Monitoring
 
-This variant includes `smartmontools` for disk health monitoring with AppArmor disabled and the required system capabilities (`SYS_RAWIO` and `SYS_ADMIN`) for accessing drive S.M.A.R.T. data.
+This variant includes `smartmontools` for disk health monitoring. The add-on uses `full_access` mode to provide necessary permissions for accessing disk S.M.A.R.T. data.
 
-### Configure Devices to Monitor
+**All disk devices are automatically detected and monitored:**
+- SATA/SAS drives (`/dev/sd*`)
+- NVMe drives (`/dev/nvme*`)
 
-**You must specify which devices to monitor** in your add-on configuration:
-
-```yaml
-monitored_devices:
-  - /dev/sda
-  - /dev/nvme0n1
-```
-
-**Find your devices:**
-
-Run this in Home Assistant SSH to list available drives:
-
-```bash
-lsblk
-```
-
-Or check specific device details:
-
-```bash
-ls /dev/sd* /dev/nvme* 2>/dev/null
-```
-
-**Leave empty to monitor all drives automatically.**
+No manual configuration required. The add-on automatically provides access to all disk devices and Beszel Agent monitors all drives with S.M.A.R.T. capabilities.
 
 ### Verify S.M.A.R.T. Detection
 
-After starting the add-on, check the logs:
+After starting the add-on, check the logs to see detected drives:
 
 ```
 S.M.A.R.T. Monitoring Status
 ✓ smartctl available for S.M.A.R.T. monitoring
-Auto-detected drives (all will be monitored):
-  - /dev/sda
-  - /dev/nvme0n1
-```
-
-Or with selective monitoring:
-
-```
-Monitoring configured devices:
+Available drives detected:
   - /dev/sda
 ```
+
+Your Beszel Hub will automatically display S.M.A.R.T. data for all detected drives.
 
 Your Beszel Hub will automatically display S.M.A.R.T. data for monitored drives.
 
@@ -149,45 +123,31 @@ custom_volumes:
     container_path: /mnt/backup:ro
 ```
 
-## Troubleshooting
+## Permissions
 
-### S.M.A.R.T. data not showing
+This add-on needs some special permissions to work:
+- **Docker API** - to see container stats
+- **Host Network** - for accurate network monitoring
+- **Host D-Bus** - to get system info
+- **Full Access** - to access disk devices for S.M.A.R.T. data
 
-1. Check add-on logs for detected drives
-2. Verify device paths with `lsblk` command
-3. Ensure devices are mounted in custom_volumes
-4. Some drives may not support S.M.A.R.T. (check with `smartctl -a /dev/sda`)
+Don't worry, these are set up automatically when you install.
 
-### Agent won't connect
+### Protection Mode
 
-- Double-check your hub URL (include http:// or https://)
-- Verify the SSH key matches what's in Beszel Hub
-- Check that port 45876 isn't blocked
-- Look at the add-on logs for clues
+Try it first with default settings. If you see errors or missing container stats:
 
-### Permission errors
+1. Open the add-on's **Configuration** tab
+2. Turn off "Protection mode"
+3. Restart the add-on
 
-If you get permission errors with mounted volumes:
-- Ensure the host paths exist
-- Check file/directory permissions on the host
+Most users need to disable Protection mode for Docker, D-Bus, and Full Access.
 
-## Regular vs S.M.A.R.T. Version
+## Need Help?
 
-**Use this S.M.A.R.T. version if:**
-- You want S.M.A.R.T. disk health monitoring
-- You need smartmontools functionality
-
-**Use the regular version if:**
-- You don't need S.M.A.R.T. monitoring
-- You want the smallest possible image size
-
-## Links
-
-- [Beszel Documentation](https://www.beszel.dev/)
-- [S.M.A.R.T. Monitoring Guide](https://www.beszel.dev/guide/smart-data)
-- [GitHub Repository](https://github.com/vineetchoudhary/home-assistant-beszel-agent)
-- [Report Issues](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues)
+- [Report issues on GitHub](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues)
+- [Check out Beszel docs](https://github.com/henrygd/beszel)
 
 ## License
 
-This project follows the same license as Beszel.
+MIT - see [LICENSE](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/LICENSE)
