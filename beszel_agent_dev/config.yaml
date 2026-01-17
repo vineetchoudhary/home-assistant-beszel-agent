@@ -1,4 +1,4 @@
-name: "Beszel Agent (dev)"
+name: "Beszel Agent (Dev)"
 description: "Development version of Beszel Agent Add-on"
 version: "0.18.2"
 slug: "beszel-agent-dev"
