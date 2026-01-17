@@ -337,27 +337,6 @@ jobs:
             --target beszel_agent \
             --docker-hub ghcr.io/vineetchoudhary
 
-      - name: Publish Dev Image (amd64 & aarch64 - Latest Builder)
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
-        uses: home-assistant/builder@master
-        with:
-          args: |
-            --amd64 \
-            --aarch64 \
-            --target beszel_agent_dev \
-            --docker-hub ghcr.io/vineetchoudhary
-
-      - name: Publish Dev Image (armv7, armhf, i386 - Legacy Builder)
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
-        uses: home-assistant/builder@2025.09.0
-        with:
-          args: |
-            --armv7 \
-            --armhf \
-            --i386 \
-            --target beszel_agent_dev \
-            --docker-hub ghcr.io/vineetchoudhary
-
       - name: Publish S.M.A.R.T. Image (amd64 & aarch64 - Latest Builder)
         if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'smart')
         uses: home-assistant/builder@master
@@ -377,6 +356,27 @@ jobs:
             --armhf \
             --i386 \
             --target beszel_agent_smart \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Publish Dev Image (amd64 & aarch64 - Latest Builder)
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --amd64 \
+            --aarch64 \
+            --target beszel_agent_dev \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Publish Dev Image (armv7, armhf, i386 - Legacy Builder)
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
+        uses: home-assistant/builder@2025.09.0
+        with:
+          args: |
+            --armv7 \
+            --armhf \
+            --i386 \
+            --target beszel_agent_dev \
             --docker-hub ghcr.io/vineetchoudhary
 
       - name: Tag dev images with latest-dev and SHA
