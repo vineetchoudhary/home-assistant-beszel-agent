@@ -451,7 +451,7 @@ jobs:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Create Git Tag
-        if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag'
+        if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag' && inputs.force_rebuild != true
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           TAG="v${VERSION}"
@@ -464,7 +464,7 @@ jobs:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Create GitHub Release
-        if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag'
+        if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag' && inputs.force_rebuild != true
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
