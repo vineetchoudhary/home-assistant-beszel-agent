@@ -15,41 +15,52 @@ Lightweight design with built-in smartmontools support.
 
 This variant includes `smartmontools` for disk health monitoring with AppArmor disabled and the required system capabilities (`SYS_RAWIO` and `SYS_ADMIN`) for accessing drive S.M.A.R.T. data.
 
-To enable S.M.A.R.T. monitoring:
+**All disk devices are automatically accessible:**
+- SATA/SAS drives (`/dev/sd*`)
+- NVMe drives (`/dev/nvme*`)
 
-### 1. Grant Device Access
+By default, all detected drives are monitored. To monitor only specific drives, configure `monitored_devices`.
 
-You need to give the add-on access to your disk devices. Add this to your add-on configuration:
+### Selective Drive Monitoring (Optional)
+
+To monitor only specific drives, add them to your configuration:
 
 ```yaml
-custom_volumes:
-  - host_path: /dev/sda
-    container_path: /dev/sda
+monitored_devices:
+  - /dev/sda
+  - /dev/nvme0n1
 ```
 
-Replace `/dev/sda` with your actual device(s). To find your devices, run this in SSH:
+**Find your devices:**
+
+Run this in Home Assistant SSH:
 
 ```bash
 lsblk
 ```
 
-### 2. Multiple Drives
+**Leave empty to monitor all drives automatically.**
 
-For multiple drives, add more entries:
+### Verify S.M.A.R.T. Detection
 
-```yaml
-custom_volumes:
-  - host_path: /dev/sda
-    container_path: /dev/sda
-  - host_path: /dev/sdb
-    container_path: /dev/sdb
-  - host_path: /dev/nvme0n1
-    container_path: /dev/nvme0n1
+After starting the add-on, check the logs:
+
+```
+S.M.A.R.T. Monitoring Status
+✓ smartctl available for S.M.A.R.T. monitoring
+Auto-detected drives (all will be monitored):
+  - /dev/sda
+  - /dev/nvme0n1
 ```
 
-### 3. Verify in Beszel Hub
+Or with selective monitoring:
 
-Once configured, your Beszel Hub will automatically detect and display S.M.A.R.T. data for available drives.
+```
+Monitoring configured devices:
+  - /dev/sda
+```
+
+Your Beszel Hub will automatically display S.M.A.R.T. data for monitored drives.
 
 **Learn more:** https://www.beszel.dev/guide/smart-data
 
