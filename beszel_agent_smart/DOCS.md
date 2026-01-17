@@ -15,15 +15,9 @@ Lightweight design with built-in smartmontools support.
 
 This variant includes `smartmontools` for disk health monitoring with AppArmor disabled and the required system capabilities (`SYS_RAWIO` and `SYS_ADMIN`) for accessing drive S.M.A.R.T. data.
 
-**All disk devices are automatically accessible:**
-- SATA/SAS drives (`/dev/sd*`)
-- NVMe drives (`/dev/nvme*`)
+### Configure Devices to Monitor
 
-By default, all detected drives are monitored. To monitor only specific drives, configure `monitored_devices`.
-
-### Selective Drive Monitoring (Optional)
-
-To monitor only specific drives, add them to your configuration:
+**You must specify which devices to monitor** in your add-on configuration:
 
 ```yaml
 monitored_devices:
@@ -33,10 +27,16 @@ monitored_devices:
 
 **Find your devices:**
 
-Run this in Home Assistant SSH:
+Run this in Home Assistant SSH to list available drives:
 
 ```bash
 lsblk
+```
+
+Or check specific device details:
+
+```bash
+ls /dev/sd* /dev/nvme* 2>/dev/null
 ```
 
 **Leave empty to monitor all drives automatically.**

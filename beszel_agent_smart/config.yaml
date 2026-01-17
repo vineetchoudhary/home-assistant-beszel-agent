@@ -11,8 +11,7 @@ host_network: true
 docker_api: true
 host_dbus: true
 devices:
-  - /dev/sd*:/dev/sd*:rwm
-  - /dev/nvme*:/dev/nvme*:rwm
+  - /dev:/dev
 privileged:
   - SYS_RAWIO
   - SYS_ADMIN
@@ -42,8 +41,7 @@ schema:
   custom_volumes:
     - host_path: str
       container_path: str
-  monitored_devices:
-    - str
+  monitored_devices: [str]
 map:
   - type: data
     read_only: false

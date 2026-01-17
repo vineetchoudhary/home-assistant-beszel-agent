@@ -129,14 +129,15 @@ if command -v smartctl >/dev/null 2>&1; then
             bashio::log.info "  - $DEVICE"
         done
     else
-        # Auto-detect all available drives
+        # Auto-detect available drives
         DRIVES=$(smartctl --scan 2>/dev/null | awk '{print $1}' || true)
         if [ -n "$DRIVES" ]; then
-            bashio::log.info "Auto-detected drives (all will be monitored):"
+            bashio::log.warning "No devices configured for monitoring"
+            bashio::log.info "Available drives detected:"
             echo "$DRIVES" | while read -r drive; do
                 bashio::log.info "  - $drive"
             done
-            bashio::log.info "Tip: Use 'monitored_devices' option to monitor specific drives only"
+            bashio::log.warning "Add devices to 'monitored_devices' configuration to enable S.M.A.R.T. monitoring"
         else
             bashio::log.warning "No drives detected"
         fi
