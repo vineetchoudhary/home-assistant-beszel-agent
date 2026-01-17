@@ -13,7 +13,7 @@ Lightweight design with built-in smartmontools support.
 
 ## S.M.A.R.T. Monitoring
 
-This variant includes `smartmontools` for disk health monitoring and runs with full device access (`full_access: true`) along with the required system capabilities (`SYS_RAWIO` and `SYS_ADMIN`) for accessing drive S.M.A.R.T. data.
+This variant includes `smartmontools` for disk health monitoring with AppArmor disabled and the required system capabilities (`SYS_RAWIO` and `SYS_ADMIN`) for accessing drive S.M.A.R.T. data.
 
 To enable S.M.A.R.T. monitoring:
 

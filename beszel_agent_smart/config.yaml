@@ -10,7 +10,7 @@ watchdog: "tcp://[HOST]:45876"
 host_network: true
 docker_api: true
 host_dbus: true
-full_access: true
+apparmor: false
 privileged:
   - SYS_RAWIO
   - SYS_ADMIN
