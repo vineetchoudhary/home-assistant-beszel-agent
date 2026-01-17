@@ -119,28 +119,15 @@ bashio::log.info "========================================"
 if command -v smartctl >/dev/null 2>&1; then
     bashio::log.info "✓ smartctl available for S.M.A.R.T. monitoring"
     
-    # Check if user specified monitored devices
-    MONITORED_DEVICES=$(bashio::config 'monitored_devices | length')
-    
-    if [ "$MONITORED_DEVICES" -gt 0 ]; then
-        bashio::log.info "Monitoring configured devices:"
-        for i in $(seq 0 $((MONITORED_DEVICES - 1))); do
-            DEVICE=$(bashio::config "monitored_devices[$i]")
-            bashio::log.info "  - $DEVICE"
+    # Auto-detect available drives
+    DRIVES=$(smartctl --scan 2>/dev/null | awk '{print $1}' || true)
+    if [ -n "$DRIVES" ]; then
+        bashio::log.info "Available drives detected:"
+        echo "$DRIVES" | while read -r drive; do
+            bashio::log.info "  - $drive"
         done
     else
-        # Auto-detect available drives
-        DRIVES=$(smartctl --scan 2>/dev/null | awk '{print $1}' || true)
-        if [ -n "$DRIVES" ]; then
-            bashio::log.warning "No devices configured for monitoring"
-            bashio::log.info "Available drives detected:"
-            echo "$DRIVES" | while read -r drive; do
-                bashio::log.info "  - $drive"
-            done
-            bashio::log.warning "Add devices to 'monitored_devices' configuration to enable S.M.A.R.T. monitoring"
-        else
-            bashio::log.warning "No drives detected"
-        fi
+        bashio::log.warning "No drives detected"
     fi
 else
     bashio::log.error "✗ smartctl not found"

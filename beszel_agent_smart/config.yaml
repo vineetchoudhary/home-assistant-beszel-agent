@@ -10,6 +10,7 @@ watchdog: "tcp://[HOST]:45876"
 host_network: true
 docker_api: true
 host_dbus: true
+usb: true
 devices:
   - /dev:/dev
 privileged:
@@ -30,7 +31,6 @@ options:
   token: ""
   environment_vars: []
   custom_volumes: []
-  monitored_devices: []
 schema:
   key: password
   hub_url: str
@@ -41,7 +41,6 @@ schema:
   custom_volumes:
     - host_path: str
       container_path: str
-  monitored_devices: [str]
 map:
   - type: data
     read_only: false
