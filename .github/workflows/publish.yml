@@ -4,14 +4,31 @@ on:
   # Check for new releases every 8 hours
   schedule:
     - cron: '0 */8 * * *'
-  # Allow manual trigger
+  # Allow manual trigger with image type selection
   workflow_dispatch:
+    inputs:
+      image_type:
+        description: 'Image type to build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - stable
+          - dev
+          - smart
+      force_rebuild:
+        description: 'Force rebuild even if version is up-to-date'
+        required: false
+        default: false
+        type: boolean
   # Trigger on new tags/releases in this repo
   push:
     tags:
       - 'v*.*.*'
     paths:
       - '.github/workflows/publish.yml'
+      - 'beszel_agent_dev/**'
 
 jobs:
   build:
@@ -28,6 +45,21 @@ jobs:
       - name: Determine trigger type
         id: trigger_type
         run: |
+          # Determine which image to build based on changed files
+          IMAGE_TYPE="all"
+          
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Check which files changed
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+            
+            if echo "$CHANGED_FILES" | grep -q "^beszel_agent_dev/"; then
+              IMAGE_TYPE="dev"
+              echo "Detected changes in beszel_agent_dev - building dev only"
+            fi
+          fi
+          
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "type=tag" >> $GITHUB_OUTPUT
             echo "This is a tag-based release - will use latest Beszel version"
@@ -37,7 +69,15 @@ jobs:
           else
             echo "type=manual" >> $GITHUB_OUTPUT
             echo "This is a manual trigger"
+            # Use input image_type if provided, otherwise use detected IMAGE_TYPE
+            if [[ -n "${{ inputs.image_type }}" ]]; then
+              IMAGE_TYPE="${{ inputs.image_type }}"
+            fi
+            echo "Image type: ${IMAGE_TYPE}"
+            echo "Force rebuild: ${{ inputs.force_rebuild || 'false' }}"
           fi
+          
+          echo "image_type=${IMAGE_TYPE}" >> $GITHUB_OUTPUT
 
       - name: Get latest release version
         id: get_version
@@ -71,8 +111,12 @@ jobs:
           CONFIG_VERSION=$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')
           echo "Config version: $CONFIG_VERSION"
           
+          # For manual triggers with force_rebuild, always proceed
+          if [[ "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "Force rebuild enabled: Building images"
+            echo "run_steps=true" >> $GITHUB_OUTPUT
           # For tag-based releases, always build with latest version
-          if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
+          elif [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
             echo "Tag-based release: Building with latest Beszel version (${{ steps.get_version.outputs.VERSION }})"
             echo "run_steps=true" >> $GITHUB_OUTPUT
           elif [ "$CONFIG_VERSION" = "${{ steps.get_version.outputs.VERSION }}" ]; then
@@ -121,7 +165,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Tag amd64 Test Image
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         uses: home-assistant/builder@master
         with:
           args: |
@@ -130,7 +174,7 @@ jobs:
             --docker-hub ghcr.io/vineetchoudhary
 
       - name: Retag and push only latest-test
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-amd64"
@@ -150,7 +194,7 @@ jobs:
           echo "Pushed ${IMAGE}:latest-test (version tag will be created later after tests pass)"
 
       - name: Test Beszel Agent Image (Stable)
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         run: |
           echo "Testing stable beszel_agent image..."
           IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-amd64:latest-test"
@@ -227,7 +271,7 @@ jobs:
           fi
 
       - name: Delete test image from registry
-        if: always() && steps.check_version.outputs.run_steps == 'true'
+        if: always() && steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           PACKAGE_NAME="home-assistant-beszel-agent-amd64"
@@ -273,7 +317,7 @@ jobs:
           fi
 
       - name: Publish Stable Image (amd64 & aarch64 - Latest Builder)
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         uses: home-assistant/builder@master
         with:
           args: |
@@ -283,7 +327,7 @@ jobs:
             --docker-hub ghcr.io/vineetchoudhary
 
       - name: Publish Home Assistant Image (armv7, armhf, i386 - Legacy Builder)
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         uses: home-assistant/builder@2025.09.0
         with:
           args: |
@@ -293,8 +337,29 @@ jobs:
             --target beszel_agent \
             --docker-hub ghcr.io/vineetchoudhary
 
+      - name: Publish Dev Image (amd64 & aarch64 - Latest Builder)
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --amd64 \
+            --aarch64 \
+            --target beszel_agent_dev \
+            --docker-hub ghcr.io/vineetchoudhary
+
+      - name: Publish Dev Image (armv7, armhf, i386 - Legacy Builder)
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
+        uses: home-assistant/builder@2025.09.0
+        with:
+          args: |
+            --armv7 \
+            --armhf \
+            --i386 \
+            --target beszel_agent_dev \
+            --docker-hub ghcr.io/vineetchoudhary
+
       - name: Publish S.M.A.R.T. Image (amd64 & aarch64 - Latest Builder)
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'smart')
         uses: home-assistant/builder@master
         with:
           args: |
@@ -304,7 +369,7 @@ jobs:
             --docker-hub ghcr.io/vineetchoudhary
 
       - name: Publish S.M.A.R.T. Image (armv7, armhf, i386 - Legacy Builder)
-        if: steps.check_version.outputs.run_steps == 'true'
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'smart')
         uses: home-assistant/builder@2025.09.0
         with:
           args: |
@@ -314,19 +379,67 @@ jobs:
             --target beszel_agent_smart \
             --docker-hub ghcr.io/vineetchoudhary
 
+      - name: Tag dev images with latest-dev and SHA
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          
+          # List of all supported architectures
+          ARCHS=("aarch64" "amd64" "armv7" "armhf" "i386")
+          
+          echo "Tagging dev images with latest-dev and SHA ${SHA_SHORT}..."
+          
+          for ARCH in "${ARCHS[@]}"; do
+            IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-${ARCH}"
+            
+            # Pull the latest image
+            if docker pull "${IMAGE}:latest" 2>/dev/null; then
+              # Tag with latest-dev and SHA
+              docker tag "${IMAGE}:latest" "${IMAGE}:latest-dev"
+              docker tag "${IMAGE}:latest" "${IMAGE}:${SHA_SHORT}"
+              
+              # Push all tags
+              docker push "${IMAGE}:latest-dev"
+              docker push "${IMAGE}:${SHA_SHORT}"
+              
+              echo "✓ Tagged ${ARCH} with latest-dev and ${SHA_SHORT}"
+            else
+              echo "⚠ Could not pull ${IMAGE}:latest - skipping tagging"
+            fi
+          done
+          
+          echo "Dev image tagging completed!"
+
       - name: Commit beszel_agent config.yaml version update
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
           git config --global user.name "Developer Insider Bot"
           git config --global user.email "bot@developerinsider.co"
-          git add beszel_agent/config.yaml beszel_agent_dev/config.yaml beszel_agent_smart/config.yaml
           
-          # Create appropriate commit message based on trigger type
-          if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
-            git commit -m "Release ${{ github.ref_name }}: Update to Beszel ${VERSION}" || echo "No changes to commit"
-          else
-            git commit -m "Update to Beszel ${VERSION}" || echo "No changes to commit"
-          fi
+          # Add appropriate config files based on image type
+          IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
+          case "$IMAGE_TYPE" in
+            "dev")
+              git add beszel_agent_dev/config.yaml
+              COMMIT_MSG="Update dev to Beszel ${VERSION}"
+              ;;
+            "smart")
+              git add beszel_agent_smart/config.yaml
+              COMMIT_MSG="Update smart to Beszel ${VERSION}"
+              ;;
+            *)
+              git add beszel_agent/config.yaml beszel_agent_dev/config.yaml beszel_agent_smart/config.yaml
+              # Create appropriate commit message based on trigger type
+              if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
+                COMMIT_MSG="Release ${{ github.ref_name }}: Update to Beszel ${VERSION}"
+              else
+                COMMIT_MSG="Update to Beszel ${VERSION}"
+              fi
+              ;;
+          esac
+          
+          git commit -m "$COMMIT_MSG" || echo "No changes to commit"
           
           # Don't push on tag releases (avoid recursion)
           if [[ "${{ steps.trigger_type.outputs.type }}" != "tag" ]]; then
