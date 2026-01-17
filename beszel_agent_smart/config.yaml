@@ -8,11 +8,9 @@ startup: application
 boot: auto
 watchdog: "tcp://[HOST]:45876"
 host_network: true
+full_access: true
 docker_api: true
 host_dbus: true
-apparmor: false
-devices:
-  - /dev:/dev
 privileged:
   - SYS_RAWIO
   - SYS_ADMIN
