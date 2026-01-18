@@ -16,15 +16,12 @@ Click this button to add the repository:
 
 [![Open your Home Assistant instance and show the add add-on repository dialog with this repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/vineetchoudhary/home-assistant-beszel-agent)
 
-Or add it manually:
-- Go to **Supervisor** → **Add-on Store** → **⋮** → **Repositories**
-- Paste: `https://github.com/vineetchoudhary/home-assistant-beszel-agent`
-- Find "Beszel Agent" in the store and hit Install
+Or add it manually by following the [step-by-step installation and setup guide with screenshots](docs/INSTALLATION.md).
 
 ## Documentation
+- [Step by Step Setup and Configuration Guide with Screenshots](docs/INSTALLATION.md)
 - [Beszel Agent - Setup and Configuration](beszel_agent/DOCS.md)
 - [Beszel Agent S.M.A.R.T. - Setup with S.M.A.R.T. Monitoring](beszel_agent_smart/DOCS.md)
-- [Step by Step Setup and Configuration Guide with Screenshots](docs/INSTALLATION.md)
 - [Testing Instructions](docs/TESTING.md)
 - [Contributing Guide](docs/CONTRIBUTING.md)
 - [Architecture Overview](docs/ARCHITECTURE.md)
@@ -33,7 +30,7 @@ Or add it manually:
 ## Which Version Should I Use?
 
 **Use Beszel Agent (S.M.A.R.T.) if:**
-- You want to monitor disk health (temperature, wear, errors)
+- You want to monitor disk health
 - You need S.M.A.R.T. data from your drives
 
 **Use Beszel Agent (Standard) if:**
