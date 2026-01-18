@@ -21,7 +21,7 @@ No manual configuration required. You need to **disable the Protection mode** to
 
 ## Installation and Setup
 
-Follow the [Installation and Setup Guide](../docs/INSTALLATION.md) to install the add-on.
+Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the add-on.
 
 ## Need Help?
 

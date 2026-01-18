@@ -12,7 +12,7 @@ Lightweight design that won't slow down your system.
 
 ## Installation and Setup
 
-Follow the [Installation and Setup Guide](../docs/INSTALLATION.md) to install the add-on.
+Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the add-on.
 
 
 ## Need Help?
