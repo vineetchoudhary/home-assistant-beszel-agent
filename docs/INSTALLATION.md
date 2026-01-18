@@ -92,13 +92,20 @@ Grab this from your Beszel Hub when you're adding a new system to monitor.
 token: "your-secret-token"
 ```
 
+Beszel Hub:
+
+![Step 8](screenshots/8-beszel-config.webp)
+
 Enter your SSH key, Hub URL, and Token:
 
 ![Step 8](screenshots/8-ha-beszel-agenet-config-fill.webp)
 
 ---
 
-## 9. (Optional) Configure Custom Volumes
+## 9. (Optional) Configure Custom Enviromnent Variables and Volumes
+
+If you want to add custom environment variables and volume mappings you can do that here. 
+
 **environment_vars** - Extra environment variables
 
 Need to pass custom environment variables? Add them here:
@@ -146,6 +153,8 @@ For S.M.A.R.T. monitoring, addon logs will show detected disks:
 ## 12. (Optional) Disable Protection Mode
 If you are not seeing expected metrics, try disabling protection mode. This is mostly required for other Add-ons stats (docker stats) and S.M.A.R.T. monitoring.
 ![Step 12](screenshots/12-ha-beszel-agenet-protection-mode.webp)
+
+Protection Mode restricts add-on access to the host system. It's a security feature, but it limits what metrics Beszel can collect. Only disable it if you trust the add-on and beszel agent - it's open source, but disabling protection does give it broader system access.
 
 ---
 
