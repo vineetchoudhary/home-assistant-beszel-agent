@@ -1,6 +1,6 @@
 name: "Beszel Agent (S.M.A.R.T.)"
 description: "Beszel Agent Add-on with S.M.A.R.T. Monitoring Support"
-version: "0.18.2"
+version: "0.18.3"
 slug: "beszel-agent-smart"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
 init: false
