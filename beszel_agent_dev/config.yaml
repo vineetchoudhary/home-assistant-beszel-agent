@@ -6,7 +6,7 @@ url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent/tree/dev"
 init: false
 startup: application
 boot: auto
-watchdog: "tcp://[HOST]:45876"
+watchdog: "http://[HOST]:45877/cgi-bin/health"
 host_network: true
 docker_api: true
 host_dbus: true

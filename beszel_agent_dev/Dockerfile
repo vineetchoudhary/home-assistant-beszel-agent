@@ -7,9 +7,13 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Copy configuration and run script
 COPY config.yaml /tmp/config.yaml
 COPY run.sh /
+COPY healthcheck-http.sh /
 
 # Install Beszel Agent
 RUN set -euo pipefail && \
+    # Install a tiny HTTP server for Home Assistant watchdog probes
+    apk add --no-cache busybox-extras && \
+    \
     # Extract version from config.yaml
     BESZEL_VERSION=$(awk -F': ' '/^version:/ {print $2}' /tmp/config.yaml | tr -d '"' | tr -d ' ') && \
     if [ -z "${BESZEL_VERSION}" ]; then \
@@ -48,7 +52,7 @@ RUN set -euo pipefail && \
         echo "[ERROR] beszel-agent binary not found after extraction" && exit 1; \
     fi && \
     mv /tmp/beszel-agent /usr/local/bin/agent && \
-    chmod +x /usr/local/bin/agent /run.sh && \
+    chmod +x /usr/local/bin/agent /run.sh /healthcheck-http.sh && \
     \
     # Cleanup
     rm -rf /tmp/beszel-agent* /tmp/config.yaml && \
