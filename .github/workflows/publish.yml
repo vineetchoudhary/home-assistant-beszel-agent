@@ -25,7 +25,7 @@ on:
   # Trigger on new tags/releases in this repo
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*'
     paths:
       - '.github/workflows/publish.yml'
       - 'beszel_agent_dev/**'
@@ -105,6 +105,30 @@ jobs:
           echo "Latest Beszel version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Resolve add-on and upstream versions
+        id: resolve_versions
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CURRENT_BESZEL_VERSION="$(tr -d '[:space:]' < beszel_agent/beszel_version)"
+          LATEST_BESZEL_VERSION="${{ steps.get_version.outputs.VERSION }}"
+
+          if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
+            ADDON_VERSION="${TAG_VERSION}"
+            BESZEL_VERSION="${CURRENT_BESZEL_VERSION}"
+            echo "Tag-based release detected"
+            echo "Using add-on/image version from git tag: ${ADDON_VERSION}"
+            echo "Using upstream Beszel version from repo state: ${BESZEL_VERSION}"
+          else
+            ADDON_VERSION="${LATEST_BESZEL_VERSION}"
+            BESZEL_VERSION="${LATEST_BESZEL_VERSION}"
+            echo "Upstream-driven release detected"
+            echo "Using add-on/image version: ${ADDON_VERSION}"
+            echo "Using upstream Beszel version: ${BESZEL_VERSION}"
+          fi
+
+          echo "ADDON_VERSION=${ADDON_VERSION}" >> $GITHUB_OUTPUT
+          echo "BESZEL_VERSION=${BESZEL_VERSION}" >> $GITHUB_OUTPUT
+
       - name: Check if config file version is up-to-date
         id: check_version
         run: |
@@ -115,11 +139,11 @@ jobs:
           if [[ "${{ inputs.force_rebuild }}" == "true" ]]; then
             echo "Force rebuild enabled: Building images"
             echo "run_steps=true" >> $GITHUB_OUTPUT
-          # For tag-based releases, always build with latest version
+          # For tag-based releases, always build with the tag version
           elif [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
-            echo "Tag-based release: Building with latest Beszel version (${{ steps.get_version.outputs.VERSION }})"
+            echo "Tag-based release: Building add-on version ${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
             echo "run_steps=true" >> $GITHUB_OUTPUT
-          elif [ "$CONFIG_VERSION" = "${{ steps.get_version.outputs.VERSION }}" ]; then
+          elif [ "$CONFIG_VERSION" = "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" ]; then
             echo "Version is up-to-date. Skipping further steps."
             echo "run_steps=false" >> $GITHUB_OUTPUT
           else
@@ -149,12 +173,16 @@ jobs:
       - name: Update version in beszel_agent config file
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
-          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent/config.yaml
-          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent_dev/config.yaml
-          sed -i "s/^version:.*/version: \"${{ steps.get_version.outputs.VERSION }}\"/" beszel_agent_smart/config.yaml
-          echo "Updated beszel_agent, beszel_agent_dev, and beszel_agent_smart to version ${{ steps.get_version.outputs.VERSION }}"
+          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_agent/config.yaml
+          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_agent_dev/config.yaml
+          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_agent_smart/config.yaml
+          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent/beszel_version
+          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent_dev/beszel_version
+          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent_smart/beszel_version
+          echo "Updated add-on version to ${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
+          echo "Updated upstream Beszel version to ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
         env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
 
       - name: Login to GitHub Container Registry
         if: steps.check_version.outputs.run_steps == 'true'
@@ -176,7 +204,7 @@ jobs:
       - name: Retag and push only latest-test
         if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
           IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-amd64"
           
           # Pull the versioned image
@@ -273,7 +301,7 @@ jobs:
       - name: Delete test image from registry
         if: always() && steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
           PACKAGE_NAME="home-assistant-beszel-agent-amd64"
           IMAGE="ghcr.io/vineetchoudhary/${PACKAGE_NAME}"
           
@@ -382,7 +410,7 @@ jobs:
       - name: Tag dev images with latest-dev and SHA
         if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
           SHA_SHORT=$(git rev-parse --short HEAD)
           
           # List of all supported architectures
@@ -421,20 +449,20 @@ jobs:
           IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
           case "$IMAGE_TYPE" in
             "dev")
-              git add beszel_agent_dev/config.yaml
-              COMMIT_MSG="Update dev to Beszel ${VERSION}"
+              git add beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version
+              COMMIT_MSG="Update dev add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
               ;;
             "smart")
-              git add beszel_agent_smart/config.yaml
-              COMMIT_MSG="Update smart to Beszel ${VERSION}"
+              git add beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version
+              COMMIT_MSG="Update smart add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
               ;;
             *)
-              git add beszel_agent/config.yaml beszel_agent_dev/config.yaml beszel_agent_smart/config.yaml
+              git add beszel_agent/config.yaml beszel_agent/beszel_version beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version
               # Create appropriate commit message based on trigger type
               if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
-                COMMIT_MSG="Release ${{ github.ref_name }}: Update to Beszel ${VERSION}"
+                COMMIT_MSG="Release ${{ github.ref_name }}: Add-on ${ADDON_VERSION}, Beszel ${BESZEL_VERSION}"
               else
-                COMMIT_MSG="Update to Beszel ${VERSION}"
+                COMMIT_MSG="Update add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
               fi
               ;;
           esac
@@ -448,12 +476,13 @@ jobs:
             echo "Skipping push for tag-based release"
           fi
         env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          ADDON_VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
+          BESZEL_VERSION: ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
 
       - name: Create Git Tag
         if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag' && inputs.force_rebuild != true
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
           TAG="v${VERSION}"
           
           git tag -a "${TAG}" -m "Release ${TAG}: Update to Beszel ${VERSION}"
@@ -461,7 +490,7 @@ jobs:
           
           echo "Created and pushed tag: ${TAG}"
         env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
 
       - name: Create GitHub Release
         if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag' && inputs.force_rebuild != true
@@ -469,23 +498,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v${{ steps.get_version.outputs.VERSION }}
-          release_name: Release v${{ steps.get_version.outputs.VERSION }}
+          tag_name: v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
+          release_name: Release v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
           body: |
-            ## Beszel Agent v${{ steps.get_version.outputs.VERSION }}
+            ## Beszel Agent v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
             
-            Updated to Beszel version ${{ steps.get_version.outputs.VERSION }}
+            Add-on version: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
+            Upstream Beszel version: ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
             
             ### Changes
-            - Updated Beszel Agent to version ${{ steps.get_version.outputs.VERSION }}
+            - Updated Beszel Agent add-on to version ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
+            - Bundles Beszel version ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
             
             ### Images
             All architectures (amd64, aarch64, armv7, armhf, i386) have been built and published to GHCR.
             
-            **Stable**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}:${{ steps.get_version.outputs.VERSION }}`
-            **Dev**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}:${{ steps.get_version.outputs.VERSION }}`
-            **S.M.A.R.T.**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart-{arch}:${{ steps.get_version.outputs.VERSION }}`
+            **Stable**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}:${{ steps.resolve_versions.outputs.ADDON_VERSION }}`
+            **Dev**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}:${{ steps.resolve_versions.outputs.ADDON_VERSION }}`
+            **S.M.A.R.T.**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart-{arch}:${{ steps.resolve_versions.outputs.ADDON_VERSION }}`
             
-            For more information about this Beszel release, see: https://github.com/henrygd/beszel/releases/tag/v${{ steps.get_version.outputs.VERSION }}
+            For more information about this Beszel release, see: https://github.com/henrygd/beszel/releases/tag/v${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
           draft: false
           prerelease: false

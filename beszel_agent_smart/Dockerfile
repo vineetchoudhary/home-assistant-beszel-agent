@@ -6,6 +6,7 @@ SHELL ["/bin/sh", "-o", "pipefail", "-c"]
 
 # Copy configuration and run script
 COPY config.yaml /tmp/config.yaml
+COPY beszel_version /tmp/beszel_version
 COPY run.sh /
 COPY healthcheck-http.sh /
 
@@ -16,10 +17,10 @@ RUN set -euo pipefail && \
     echo "[INFO] Installed smartmontools for S.M.A.R.T. monitoring" && \
     echo "[INFO] Installed busybox-extras for watchdog health endpoint" && \
     \
-    # Extract version from config.yaml
-    BESZEL_VERSION=$(awk -F': ' '/^version:/ {print $2}' /tmp/config.yaml | tr -d '"' | tr -d ' ') && \
+    # Extract upstream Beszel version
+    BESZEL_VERSION=$(tr -d '[:space:]' < /tmp/beszel_version) && \
     if [ -z "${BESZEL_VERSION}" ]; then \
-        echo "[ERROR] Failed to extract version from config.yaml" && exit 1; \
+        echo "[ERROR] Failed to extract version from beszel_version" && exit 1; \
     fi && \
     echo "[INFO] Installing Beszel Agent version: ${BESZEL_VERSION}" && \
     \
@@ -57,7 +58,7 @@ RUN set -euo pipefail && \
     chmod +x /usr/local/bin/agent /run.sh /healthcheck-http.sh && \
     \
     # Cleanup
-    rm -rf /tmp/beszel-agent* /tmp/config.yaml && \
+    rm -rf /tmp/beszel-agent* /tmp/config.yaml /tmp/beszel_version && \
     echo "[INFO] Beszel Agent installed successfully with S.M.A.R.T. support"
 
 # Run the agent

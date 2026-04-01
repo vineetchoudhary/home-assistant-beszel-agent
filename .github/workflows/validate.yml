@@ -37,7 +37,7 @@ jobs:
       - name: Check required files
         run: |
           echo "Checking required files..."
-          required_files=("config.yaml" "Dockerfile" "run.sh" "DOCS.md")
+          required_files=("config.yaml" "Dockerfile" "run.sh" "DOCS.md" "beszel_version")
           for addon in beszel_agent beszel_agent_dev; do
             echo "Checking ${addon}..."
             for file in "${required_files[@]}"; do
@@ -78,13 +78,13 @@ jobs:
           # Check beszel_agent
           CONFIG_VERSION=$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')
           echo "beszel_agent version: $CONFIG_VERSION"
-          if [[ ! "$CONFIG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "WARNING: beszel_agent version does not follow semantic versioning (X.Y.Z)"
+          if [[ ! "$CONFIG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "WARNING: beszel_agent version does not follow expected versioning (X.Y.Z or X.Y.Z.W)"
           fi
           
           # Check beszel_agent_dev
           CONFIG_VERSION_DEV=$(grep '^version:' beszel_agent_dev/config.yaml | sed -E 's/version: "(.*)"/\1/')
           echo "beszel_agent_dev version: $CONFIG_VERSION_DEV"
-          if [[ ! "$CONFIG_VERSION_DEV" =~ ^[0-9]+\.[0-9]+\.[0-9]+-dev$ ]]; then
-            echo "WARNING: beszel_agent_dev version should follow format X.Y.Z-dev"
+          if [[ ! "$CONFIG_VERSION_DEV" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-dev)?$ ]]; then
+            echo "WARNING: beszel_agent_dev version should follow format X.Y.Z, X.Y.Z.W, or include -dev"
           fi
