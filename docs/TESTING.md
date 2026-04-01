@@ -77,9 +77,10 @@ python3 -c "import yaml; yaml.safe_load(open('beszel_agent/config.yaml'))" || ex
 
 echo "✓ Checking shell script..."
 bash -n beszel_agent/run.sh || exit 1
+sh -n beszel_agent/healthcheck-http.sh || exit 1
 
 echo "✓ Looking for required files..."
-for file in config.yaml Dockerfile run.sh DOCS.md; do
+for file in config.yaml Dockerfile run.sh DOCS.md beszel_version healthcheck-http.sh; do
   if [ ! -f "beszel_agent/$file" ]; then
     echo "❌ Missing: $file"
     exit 1
@@ -101,6 +102,8 @@ echo "✅ All tests passed!"
 echo ""
 echo "To test interactively:"
 echo "  docker run --rm -it --entrypoint /bin/bash beszel-agent-test"
+echo "To test the watchdog endpoint in the container:"
+echo "  wget -S -O- http://127.0.0.1:45877/cgi-bin/health"
 ```
 
 Make it executable and run:

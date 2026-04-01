@@ -126,6 +126,11 @@ For S.M.A.R.T. monitoring, addon logs will show detected disks:
 
 ![Step 11](screenshots/11-beszel-agent-smart-log.webp)
 
+The add-on uses two internal ports:
+
+- `45876` for the Beszel agent connection from your Beszel Hub
+- `45877` for the internal Home Assistant watchdog healthcheck endpoint
+
 ## 12. (Optional) Disable Protection Mode
 If you are not seeing expected metrics, try disabling protection mode. This is mostly required for other Add-ons stats (docker stats) and S.M.A.R.T. monitoring.
 ![Step 12](screenshots/12-ha-beszel-agenet-protection-mode.webp)
@@ -141,6 +146,7 @@ For S.M.A.R.T. monitoring, you should see disk health metrics:
 
 ## Troubleshooting & Support
 - If you encounter issues, check the add-on logs for errors.
+- If Home Assistant reports watchdog failures, check whether the logs mention the HTTP health endpoint on port `45877`.
 - For advanced configuration, see the main documentation or open an issue on GitHub.
 
 **Enjoy monitoring your Home Assistant system with Beszel Agent!**

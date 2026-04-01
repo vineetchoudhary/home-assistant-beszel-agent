@@ -20,8 +20,13 @@ Since you're here, you probably want to know what's going on under the hood.
 │  │  │  (monitors system/containers)   │  │  │
 │  │  └───────────────┬──────────────┘  │  │
 │  │                 │                     │  │
+│  │  ┌───────────────▼──────────────┐  │  │
+│  │  │   HTTP Healthcheck Helper      │  │  │
+│  │  │   (watchdog only, optional)    │  │  │
+│  │  └───────────────┬──────────────┘  │  │
+│  │                 │                     │  │
 │  └─────────────────┼─────────────────────┘  │
-│                Port 45876                   │
+│      Ports 45876 (agent) / 45877 (health)  │
 └─────────────────┼───────────────────────────┘
                  │
                  ▼

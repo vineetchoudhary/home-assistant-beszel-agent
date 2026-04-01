@@ -10,6 +10,13 @@ Monitor your Home Assistant system with Beszel. This add-on runs the Beszel agen
 
 Lightweight design that won't slow down your system.
 
+## Watchdog and Healthcheck
+
+This add-on uses two internal ports:
+
+- `45876/tcp` for the Beszel agent
+- `45877/tcp` for a lightweight HTTP watchdog endpoint
+
 ## Installation and Setup
 
 Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the add-on.
