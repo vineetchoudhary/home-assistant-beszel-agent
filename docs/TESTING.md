@@ -80,7 +80,7 @@ bash -n beszel_agent/run.sh || exit 1
 sh -n beszel_agent/healthcheck-http.sh || exit 1
 
 echo "✓ Looking for required files..."
-for file in config.yaml Dockerfile run.sh DOCS.md beszel_version healthcheck-http.sh; do
+for file in config.yaml Dockerfile run.sh DOCS.md CHANGELOG.md beszel_version healthcheck-http.sh; do
   if [ ! -f "beszel_agent/$file" ]; then
     echo "❌ Missing: $file"
     exit 1
