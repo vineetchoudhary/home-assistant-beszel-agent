@@ -186,6 +186,13 @@ jobs:
           printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent/beszel_version
           printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent_dev/beszel_version
           printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent_smart/beszel_version
+          printf '# Changelog\n\n[View GitHub release v%s](https://github.com/%s/releases/tag/v%s)\n' \
+            "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" \
+            "${{ github.repository }}" \
+            "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" \
+            > beszel_agent/CHANGELOG.md
+          cp beszel_agent/CHANGELOG.md beszel_agent_dev/CHANGELOG.md
+          cp beszel_agent/CHANGELOG.md beszel_agent_smart/CHANGELOG.md
           echo "Updated add-on version to ${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
           echo "Updated upstream Beszel version to ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
         env:
@@ -456,15 +463,15 @@ jobs:
           IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
           case "$IMAGE_TYPE" in
             "dev")
-              git add beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version
+              git add beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version beszel_agent_dev/CHANGELOG.md
               COMMIT_MSG="Update dev add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
               ;;
             "smart")
-              git add beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version
+              git add beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version beszel_agent_smart/CHANGELOG.md
               COMMIT_MSG="Update smart add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
               ;;
             *)
-              git add beszel_agent/config.yaml beszel_agent/beszel_version beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version
+              git add beszel_agent/config.yaml beszel_agent/beszel_version beszel_agent/CHANGELOG.md beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version beszel_agent_dev/CHANGELOG.md beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version beszel_agent_smart/CHANGELOG.md
               # Create appropriate commit message based on trigger type
               if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
                 COMMIT_MSG="Release ${{ github.ref_name }}: Add-on ${ADDON_VERSION}, Beszel ${BESZEL_VERSION}"
