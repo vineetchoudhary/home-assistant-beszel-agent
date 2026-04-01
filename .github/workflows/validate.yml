@@ -37,7 +37,7 @@ jobs:
       - name: Check required files
         run: |
           echo "Checking required files..."
-          required_files=("config.yaml" "Dockerfile" "run.sh" "DOCS.md" "beszel_version")
+          required_files=("config.yaml" "Dockerfile" "run.sh" "DOCS.md" "CHANGELOG.md" "beszel_version")
           for addon in beszel_agent beszel_agent_dev; do
             echo "Checking ${addon}..."
             for file in "${required_files[@]}"; do
