@@ -109,6 +109,7 @@ jobs:
         id: resolve_versions
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CURRENT_ADDON_VERSION="$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')"
           CURRENT_BESZEL_VERSION="$(tr -d '[:space:]' < beszel_agent/beszel_version)"
           LATEST_BESZEL_VERSION="${{ steps.get_version.outputs.VERSION }}"
 
@@ -118,10 +119,16 @@ jobs:
             echo "Tag-based release detected"
             echo "Using add-on/image version from git tag: ${ADDON_VERSION}"
             echo "Using upstream Beszel version from repo state: ${BESZEL_VERSION}"
-          else
+          elif [[ "${LATEST_BESZEL_VERSION}" != "${CURRENT_BESZEL_VERSION}" ]]; then
             ADDON_VERSION="${LATEST_BESZEL_VERSION}"
             BESZEL_VERSION="${LATEST_BESZEL_VERSION}"
-            echo "Upstream-driven release detected"
+            echo "Upstream Beszel update detected"
+            echo "Using add-on/image version: ${ADDON_VERSION}"
+            echo "Using upstream Beszel version: ${BESZEL_VERSION}"
+          else
+            ADDON_VERSION="${CURRENT_ADDON_VERSION}"
+            BESZEL_VERSION="${CURRENT_BESZEL_VERSION}"
+            echo "No upstream Beszel change detected"
             echo "Using add-on/image version: ${ADDON_VERSION}"
             echo "Using upstream Beszel version: ${BESZEL_VERSION}"
           fi
