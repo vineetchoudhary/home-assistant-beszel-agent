@@ -515,22 +515,8 @@ jobs:
           tag_name: v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
           release_name: Release v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
           body: |
-            ## Beszel Agent v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
-            
-            Add-on version: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
-            Upstream Beszel version: ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
-            
-            ### Changes
+            ## Changes
             - Updated Beszel Agent add-on to version ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
-            - Bundles Beszel version ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
-            
-            ### Images
-            All architectures (amd64, aarch64, armv7, armhf, i386) have been built and published to GHCR.
-            
-            **Stable**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}:${{ steps.resolve_versions.outputs.ADDON_VERSION }}`
-            **Dev**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-{arch}:${{ steps.resolve_versions.outputs.ADDON_VERSION }}`
-            **S.M.A.R.T.**: `ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart-{arch}:${{ steps.resolve_versions.outputs.ADDON_VERSION }}`
-            
-            For more information about this Beszel release, see: https://github.com/henrygd/beszel/releases/tag/v${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
+            - Upstream release notes: https://github.com/henrygd/beszel/releases/tag/v${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
           draft: false
           prerelease: false
