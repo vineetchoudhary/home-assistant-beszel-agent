@@ -9,10 +9,16 @@ die() {
     exit 1
 }
 
+# Check if Supervisor API is available by checking for SUPERVISOR_TOKEN environment variable
+supervisor_api_available() {
+    [ -n "${SUPERVISOR_TOKEN:-}" ]
+}
+
+# Check if add-on watchdog is enabled by querying the Supervisor API
 addon_watchdog_enabled() {
     local addon_info=""
 
-    if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
+    if ! supervisor_api_available; then
         bashio::log.info "Skipping healthcheck server: SUPERVISOR_TOKEN not available"
         return 1
     fi
@@ -43,6 +49,7 @@ addon_watchdog_enabled() {
     return 1
 }
 
+# Start a simple HTTP server to serve the healthcheck endpoint if the add-on watchdog is enabled
 start_healthcheck_server() {
     local health_root="/tmp/beszel-health"
     local health_port="45877"
@@ -83,11 +90,13 @@ bashio::log.info "Starting Beszel Agent (S.M.A.R.T.)..."
 bashio::log.info "========================================"
 
 # Get required configuration
-# Try to get from Supervisor API first, fallback to environment variables for testing
-KEY="$(bashio::config 'key' 2>/dev/null || true)"
-if [ -z "$KEY" ] && [ -n "${BESZEL_KEY:-}" ]; then
+# Use environment variables first for local/docker testing to avoid noisy Supervisor API failures.
+KEY=""
+if [ -n "${BESZEL_KEY:-}" ]; then
     bashio::log.info "Using KEY from environment variable (test mode)"
     KEY="$BESZEL_KEY"
+elif supervisor_api_available; then
+    KEY="$(bashio::config 'key' 2>/dev/null || true)"
 fi
 if [ -z "$KEY" ]; then
     die "Configuration error: 'key' is required but not set"
@@ -98,19 +107,23 @@ if ! [[ "$KEY" =~ ^ssh- ]]; then
     bashio::log.warning "Key does not appear to be a valid SSH public key (should start with 'ssh-')"
 fi
 
-HUB_URL="$(bashio::config 'hub_url' 2>/dev/null || true)"
-if [ -z "$HUB_URL" ] && [ -n "${BESZEL_HUB_URL:-}" ]; then
+HUB_URL=""
+if [ -n "${BESZEL_HUB_URL:-}" ]; then
     bashio::log.info "Using HUB_URL from environment variable (test mode)"
     HUB_URL="$BESZEL_HUB_URL"
+elif supervisor_api_available; then
+    HUB_URL="$(bashio::config 'hub_url' 2>/dev/null || true)"
 fi
 if [ -z "$HUB_URL" ]; then
     die "Configuration error: 'hub_url' is required but not set"
 fi
 
-TOKEN="$(bashio::config 'token' 2>/dev/null || true)"
-if [ -z "$TOKEN" ] && [ -n "${BESZEL_TOKEN:-}" ]; then
+TOKEN=""
+if [ -n "${BESZEL_TOKEN:-}" ]; then
     bashio::log.info "Using TOKEN from environment variable (test mode)"
     TOKEN="$BESZEL_TOKEN"
+elif supervisor_api_available; then
+    TOKEN="$(bashio::config 'token' 2>/dev/null || true)"
 fi
 if [ -z "$TOKEN" ]; then
     die "Configuration error: 'token' is required but not set"
@@ -124,7 +137,7 @@ bashio::log.info "Hub URL: ${HUB_URL}"
 bashio::log.info "Token configured"
 
 # Set custom environment variables dynamically
-if bashio::config.has_value 'environment_vars'; then
+if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
     bashio::log.info "Processing custom environment variables..."
     index=0
     while bashio::config.exists "environment_vars[${index}]"; do
@@ -144,7 +157,7 @@ fi
 
 # Process custom volumes (for logging/verification purposes)
 # Note: Actual mounting is handled by Home Assistant supervisor based on config.yaml
-if bashio::config.has_value 'custom_volumes'; then
+if supervisor_api_available && bashio::config.has_value 'custom_volumes'; then
     bashio::log.info "Custom volumes configured:"
     index=0
     volume_count=0
