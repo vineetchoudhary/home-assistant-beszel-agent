@@ -22,7 +22,7 @@ ports:
   45877/tcp: 45877
 ports_description:
   45876/tcp: "Beszel agent SSH listener"
-  45877/tcp: "Home Assistant watchdog healthcheck endpoint"
+  45877/tcp: "Home Assistant watchdog healthcheck endpoint. Not configurable; if this port is already in use, disable watchdog."
 image: "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart-{arch}"
 options:
   key: ""
