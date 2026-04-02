@@ -37,20 +37,7 @@ docker build \
   -t beszel-agent-test .
 ```
 
-**Make a fake config:**
-```bash
-mkdir -p /tmp/beszel-test
-
-cat > /tmp/beszel-test/options.json << 'EOF'
-{
-  "key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyHere",
-  "hub_url": "http://localhost:8090",
-  "token": "test-token",
-  "environment_vars": [],
-  "custom_volumes": []
-}
-EOF
-```
+If your local Docker engine is running on Apple Silicon or another ARM64 machine, either use `ghcr.io/home-assistant/aarch64-base:latest` or add `--platform=linux/amd64` to the `docker build` command.
 
 **Run it:**
 ```bash
@@ -59,6 +46,9 @@ docker run --rm -it \
   --network host \
   -v /tmp/beszel-test:/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -e BESZEL_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@github-actions" \
+  -e BESZEL_HUB_URL="http://0.0.0.0" \
+  -e BESZEL_TOKEN="test-token-for-ci" \
   beszel-agent-test
 ```
 
