@@ -14,6 +14,38 @@ supervisor_api_available() {
     [ -n "${SUPERVISOR_TOKEN:-}" ]
 }
 
+fetch_addon_info() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL \
+            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+            http://supervisor/addons/self/info 2>/dev/null || true
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- \
+            --header="Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+            http://supervisor/addons/self/info 2>/dev/null || true
+    else
+        return 1
+    fi
+}
+
+resolve_healthcheck_port() {
+    local addon_info=""
+    local health_port=""
+
+    addon_info="$(fetch_addon_info)"
+    health_port="$(printf '%s' "${addon_info}" | sed -nE 's/.*\[PORT:([0-9]+)\].*/\1/p' | head -n 1)"
+
+    if [ -z "${health_port}" ]; then
+        health_port="$(printf '%s' "${addon_info}" | sed -nE 's|.*http://[^:]+:([0-9]+)/.*|\1|p' | head -n 1)"
+    fi
+
+    if [ -z "${health_port}" ]; then
+        health_port="45877"
+    fi
+
+    printf '%s\n' "${health_port}"
+}
+
 # Check if add-on watchdog is enabled by querying the Supervisor API
 addon_watchdog_enabled() {
     local addon_info=""
@@ -23,15 +55,7 @@ addon_watchdog_enabled() {
         return 1
     fi
 
-    if command -v curl >/dev/null 2>&1; then
-        addon_info="$(curl -fsSL \
-            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
-            http://supervisor/addons/self/info 2>/dev/null || true)"
-    elif command -v wget >/dev/null 2>&1; then
-        addon_info="$(wget -qO- \
-            --header="Authorization: Bearer ${SUPERVISOR_TOKEN}" \
-            http://supervisor/addons/self/info 2>/dev/null || true)"
-    else
+    if ! addon_info="$(fetch_addon_info)"; then
         bashio::log.warning "Skipping healthcheck server: neither curl nor wget is available"
         return 1
     fi
@@ -52,12 +76,14 @@ addon_watchdog_enabled() {
 # Start a simple HTTP server to serve the healthcheck endpoint if the add-on watchdog is enabled
 start_healthcheck_server() {
     local health_root="/tmp/beszel-health"
-    local health_port="45877"
+    local health_port=""
     local -a httpd_cmd=()
 
     if ! addon_watchdog_enabled; then
         return 0
     fi
+
+    health_port="$(resolve_healthcheck_port)"
 
     if command -v httpd >/dev/null 2>&1; then
         httpd_cmd=("$(command -v httpd)" -f -p "${health_port}" -h "${health_root}")
