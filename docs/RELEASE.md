@@ -5,7 +5,7 @@ Two types of releases:
 To keep the add-on synced with upstream Beszel automatically, the GitHub Actions Workflow checks for new Beszel versions and:
 
 1. Updates config.yaml
-2. Builds all architectures
+2. Builds the supported 64-bit architectures (`amd64`, `aarch64`)
 3. Pushes to GHCR
 4. Commits the config.yaml change
 
@@ -21,7 +21,7 @@ Release add-on improvements:
 ## Version Numbers
 Two different versions to keep track of:
 
-- **Beszel version** (in config.yaml): `0.17.0` - the upstream agent
-- **Add-on version** (repo tag): `v1.0.0` -  repository release
+- **Beszel version** (in `beszel_version`): `0.18.6` - the upstream agent
+- **Add-on version** (in `config.yaml` and repo tag): `0.18.6.1` / `v0.18.6.1` - repository release
 
-Tag-based releases always use the latest Beszel version. The config version is updated during the build.
+Tag-based releases use the git tag as the add-on version and keep the current upstream Beszel version from `beszel_version`.

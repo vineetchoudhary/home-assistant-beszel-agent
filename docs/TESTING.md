@@ -116,6 +116,5 @@ chmod +x test-addon.sh
 ## Resources
 
 - [Home Assistant Add-on Development](https://developers.home-assistant.io/docs/add-ons)
-- [Home Assistant Builder](https://github.com/home-assistant/builder)
 - [Beszel Documentation](https://github.com/henrygd/beszel)
 - [Docker Documentation](https://docs.docker.com/)

@@ -8,8 +8,6 @@ Monitor your Home Assistant system with Beszel. This add-on runs the Beszel agen
 - Home Assistant Add-ons (via Docker API)
 - Historical data with trends
 
-Lightweight design that won't slow down your system.
-
 ## Watchdog and Healthcheck
 
 This add-on uses two internal ports:
@@ -30,4 +28,3 @@ Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/hom
 ## License
 
 MIT - see [LICENSE](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/LICENSE)
-

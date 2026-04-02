@@ -26,10 +26,7 @@ RUN set -euo pipefail && \
     ARCH=$(uname -m) && \
     case "$ARCH" in \
         x86_64) BESZEL_ARCH="amd64" ;; \
-        armv7l) BESZEL_ARCH="arm" ;; \
         aarch64) BESZEL_ARCH="arm64" ;; \
-        i386|i686) BESZEL_ARCH="386" ;; \
-        armhf) BESZEL_ARCH="arm" ;; \
         *) echo "[ERROR] Unsupported architecture: $ARCH" && exit 1 ;; \
     esac && \
     echo "[INFO] Detected architecture: ${ARCH} -> ${BESZEL_ARCH}" && \
