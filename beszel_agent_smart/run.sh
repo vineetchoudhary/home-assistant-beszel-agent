@@ -77,6 +77,7 @@ addon_watchdog_enabled() {
 start_healthcheck_server() {
     local health_root="/tmp/beszel-health"
     local health_port=""
+    local httpd_output=""
     local -a httpd_cmd=()
 
     if ! addon_watchdog_enabled; then
@@ -101,7 +102,13 @@ start_healthcheck_server() {
     # Run the helper independently so healthcheck failures never stop the agent.
     (
         while true; do
-            "${httpd_cmd[@]}"
+            httpd_output="$("${httpd_cmd[@]}" 2>&1 || true)"
+            if printf '%s' "${httpd_output}" | grep -qi 'Address in use'; then
+                bashio::log.error "Healthcheck server failed to bind port ${health_port}: ${httpd_output}"
+                bashio::log.error "Change the watchdog port or disable the watchdog, otherwise Home Assistant may keep restarting this add-on in a loop."
+            elif [ -n "${httpd_output}" ]; then
+                bashio::log.warning "Healthcheck server exited: ${httpd_output}"
+            fi
             bashio::log.warning "Healthcheck server exited; retrying in 5 seconds"
             sleep 5
         done
