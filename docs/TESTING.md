@@ -45,7 +45,7 @@ cat > /tmp/beszel-test/options.json << 'EOF'
 {
   "key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyHere",
   "hub_url": "http://localhost:8090",
-  "token": "",
+  "token": "test-token",
   "environment_vars": [],
   "custom_volumes": []
 }
@@ -57,8 +57,8 @@ EOF
 docker run --rm -it \
   --name beszel-agent-test \
   --network host \
-  -v /var/run/docker.sock:/var/run/docker.sock \
   -v /tmp/beszel-test:/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
   beszel-agent-test
 ```
 
@@ -111,7 +111,6 @@ Make it executable and run:
 chmod +x test-addon.sh
 ./test-addon.sh
 ```
-
 
 ## Resources
 

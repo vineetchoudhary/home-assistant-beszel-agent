@@ -26,7 +26,7 @@ Before you submit:
 1. Try it in a real Home Assistant instance
 2. Make sure your new config options work
 3. Check the logs for errors
-4. Test on different architectures if you can
+4. Test the add-on variant you changed if you can
 
 Test instructions are [here](TESTING.md).
 
