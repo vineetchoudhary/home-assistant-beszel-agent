@@ -16,6 +16,9 @@ arch:
 ports:
   45876/tcp: 45876
   45877/tcp: 45877
+ports_description:
+  45876/tcp: "Beszel agent SSH listener"
+  45877/tcp: "Home Assistant watchdog healthcheck endpoint"
 image: "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-{arch}"
 options:
   key: ""
