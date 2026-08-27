@@ -1,14 +1,16 @@
-# Beszel Agent for Home Assistant
+# Beszel Add-ons for Home Assistant
 
-Monitor your Home Assistant system with Beszel. Tracks CPU, memory, disk, network, and Docker containers - lightweight and efficient.
+Run Beszel inside Home Assistant with add-ons for both the Hub and the Agent. Monitor your Home Assistant system and other hosts with a lightweight monitoring stack.
 
 ## Available Add-ons
 
-This repository provides three add-on variants:
+This repository provides five add-ons:
 
-1. **Beszel Agent** - Standard lightweight monitoring
-2. **Beszel Agent (S.M.A.R.T.)** - With S.M.A.R.T. disk health monitoring
-3. **Beszel Agent (Test)** - Development/testing version
+1. **Beszel Hub** - Run the Beszel web UI and API inside Home Assistant
+2. **Beszel Hub (Test)** - Development/testing version of the Hub
+3. **Beszel Agent** - Standard lightweight monitoring
+4. **Beszel Agent (S.M.A.R.T.)** - With S.M.A.R.T. disk health monitoring
+5. **Beszel Agent (Test)** - Development/testing version
 
 ## Quick Start
 
@@ -20,6 +22,8 @@ Or add it manually by following the [step-by-step installation and setup guide w
 
 ## Documentation
 - [Step by Step Setup and Configuration Guide with Screenshots](docs/INSTALLATION.md)
+- [Beszel Hub - Setup and Configuration](beszel_hub/DOCS.md)
+- [Beszel Hub (Test) - Setup and Configuration](beszel_hub_dev/DOCS.md)
 - [Beszel Agent - Setup and Configuration](beszel_agent/DOCS.md)
 - [Beszel Agent S.M.A.R.T. - Setup with S.M.A.R.T. Monitoring](beszel_agent_smart/DOCS.md)
 - [Testing Instructions](docs/TESTING.md)
@@ -29,6 +33,10 @@ Or add it manually by following the [step-by-step installation and setup guide w
 
 ## Which Version Should I Use?
 
+**Use Beszel Hub if:**
+- You want to run the Beszel server directly inside Home Assistant
+- You prefer a single-box setup for a small lab or home deployment
+
 **Use Beszel Agent (S.M.A.R.T.) if:**
 - You want to monitor disk health
 - You need S.M.A.R.T. data from your drives
@@ -36,6 +44,10 @@ Or add it manually by following the [step-by-step installation and setup guide w
 **Use Beszel Agent (Standard) if:**
 - You just need basic system monitoring
 - You want the smallest image size
+
+**Use a Test variant if:**
+- You want to validate upcoming Hub or Agent changes
+- You are comfortable testing development builds before using them in production
 
 ## What's Beszel?
 

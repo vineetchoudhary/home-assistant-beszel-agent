@@ -20,7 +20,7 @@ cd home-assistant-beszel-agent
 
 3. **Install it:**
 - Refresh the add-on store page
-- Find "Beszel Agent" under local add-ons
+- Find the add-on you want under local add-ons ("Beszel Agent", "Beszel Hub", ...)
 - Hit Install and configure it
 - Watch the logs for any problems
 
@@ -53,6 +53,44 @@ docker run --rm -it \
 ```
 
 
+## Quick Docker Test - Hub
+
+The Hub needs no configuration to boot, so a bare `docker run` is enough:
+
+**Build it:**
+```bash
+docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest -t beszel-hub-test beszel_hub/
+```
+
+On Apple Silicon or another ARM64 machine, use `ghcr.io/home-assistant/aarch64-base:latest` instead.
+
+**Run it:**
+```bash
+docker run --rm -it --name beszel-hub-test -p 8090:8090 beszel-hub-test
+```
+
+**Check it:**
+```bash
+curl -fsS http://127.0.0.1:8090/api/health
+```
+
+You should get `{"message":"API is healthy.","code":200,"data":{}}`, and the logs should show `Server started at http://0.0.0.0:8090`. Open http://127.0.0.1:8090 and the UI will prompt you to create the first user.
+
+To exercise the `app_url` path without a Supervisor, set the environment variable the Hub itself reads:
+
+```bash
+docker run --rm -it -p 8090:8090 -e APP_URL="https://beszel.example.com" beszel-hub-test
+```
+
+Note that a URL with a path (`https://example.com/beszel`) makes the Hub serve its assets under that path, so `http://127.0.0.1:8090/` will 404 on its JS bundle - browse to `http://127.0.0.1:8090/beszel/` instead. That is expected Beszel behaviour, not an add-on bug.
+
+Data lands in `/var/lib/beszel-hub/beszel_data` inside the container. Mount a host directory there if you want it to survive `--rm`:
+
+```bash
+docker run --rm -it -p 8090:8090 -v /tmp/beszel-hub-data:/var/lib/beszel-hub beszel-hub-test
+```
+
+
 ## Quick Test Script
 
 Save this as `test-addon.sh`:
@@ -60,40 +98,48 @@ Save this as `test-addon.sh`:
 ```bash
 #!/bin/bash
 
-echo "🪪 Testing Beszel Agent..."
+ADDONS="beszel_agent beszel_agent_dev beszel_agent_smart beszel_hub beszel_hub_dev"
 
-echo "✓ Checking YAML..."
-python3 -c "import yaml; yaml.safe_load(open('beszel_agent/config.yaml'))" || exit 1
+for addon in $ADDONS; do
+  echo "🪪 Testing ${addon}..."
 
-echo "✓ Checking shell script..."
-bash -n beszel_agent/run.sh || exit 1
-sh -n beszel_agent/healthcheck-http.sh || exit 1
+  echo "✓ Checking YAML..."
+  python3 -c "import yaml; yaml.safe_load(open('${addon}/config.yaml'))" || exit 1
 
-echo "✓ Looking for required files..."
-for file in config.yaml Dockerfile run.sh DOCS.md CHANGELOG.md beszel_version healthcheck-http.sh; do
-  if [ ! -f "beszel_agent/$file" ]; then
-    echo "❌ Missing: $file"
-    exit 1
+  echo "✓ Checking shell script..."
+  bash -n "${addon}/run.sh" || exit 1
+  if [ -f "${addon}/healthcheck-http.sh" ]; then
+    sh -n "${addon}/healthcheck-http.sh" || exit 1
   fi
-  echo "  - beszel_agent/$file"
+
+  echo "✓ Looking for required files..."
+  for file in config.yaml Dockerfile run.sh DOCS.md CHANGELOG.md beszel_version icon.png logo.png; do
+    if [ ! -f "${addon}/$file" ]; then
+      echo "❌ Missing: ${addon}/$file"
+      exit 1
+    fi
+    echo "  - ${addon}/$file"
+  done
+
+  echo "✓ Building Docker image..."
+  docker build \
+    --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest \
+    -t "${addon//_/-}-test" \
+    "${addon}/" || exit 1
+
+  echo "✓ Checking image size..."
+  docker images "${addon//_/-}-test" --format "{{.Size}}"
+  echo ""
 done
 
-echo "✓ Building Docker image..."
-docker build \
-  --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest \
-  -t beszel-agent-test \
-  beszel_agent/ || exit 1
-
-echo "✓ Checking image size..."
-docker images beszel-agent-test --format "{{.Size}}"
-
-echo ""
 echo "✅ All tests passed!"
 echo ""
 echo "To test interactively:"
 echo "  docker run --rm -it --entrypoint /bin/bash beszel-agent-test"
-echo "To test the watchdog endpoint in the container:"
+echo "To test the agent watchdog endpoint in the container:"
 echo "  wget -S -O- http://127.0.0.1:45877/cgi-bin/health"
+echo "To test the hub health endpoint:"
+echo "  curl -fsS http://127.0.0.1:8090/api/health"
 ```
 
 Make it executable and run:

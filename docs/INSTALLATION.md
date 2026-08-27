@@ -1,6 +1,6 @@
-# Beszel Agent Add-on Installation & Setup Guide
+# Beszel Add-ons Installation & Setup Guide
 
-This guide walks you through installing and configuring the Beszel Agent add-on for Home Assistant, using step-by-step screenshots.
+This guide walks you through installing and configuring the Beszel add-ons for Home Assistant. The screenshots focus on the Agent add-ons, but the repository also includes Beszel Hub add-ons.
 
 ## 1. Open Home Assistant Add-ons
 Open your Home Assistant instance and navigate to Settings. Click on "Add-ons":
@@ -23,26 +23,32 @@ https://github.com/vineetchoudhary/home-assistant-beszel-agent
 ![Step 4](screenshots/4-ha-add-ons-add-repo.webp)
 
 ## 5. Confirm Repository Added
-You should see the Beszel Agent repository listed:
+You should see the Beszel add-on repository listed:
 ![Step 5](screenshots/5-ha-add-ons-repo-added.webp)
 
-This repository provides three add-on variants (setup process is same for all variants):
+This repository provides five add-ons:
 
-### 5.1 Beszel Agent
+### 5.1 Beszel Hub
+Run the Beszel Hub directly inside Home Assistant for smaller or self-contained setups.
+
+### 5.2 Beszel Hub (Test)
+Development/testing version of the Hub.
+
+### 5.3 Beszel Agent
 For standard monitoring
 
 ![Step 5.1](screenshots/5-beszel-agent-home-assistant.webp)
 
-### 5.2 Beszel Agent (S.M.A.R.T.)
+### 5.4 Beszel Agent (S.M.A.R.T.)
 For monitoring with S.M.A.R.T. disk health checks.
 
 ![Step 5.2](screenshots/5-beszel-agent-smart-home-assistant.webp)
 
-### 5.3 Beszel Agent (Test)
+### 5.5 Beszel Agent (Test)
 Development/testing version
 
-## 6. Install Beszel Agent Add-on
-Click on the "Beszel Agent" add-on you want to install and then click "Install":
+## 6. Install a Beszel Add-on
+Click on the Beszel add-on you want to install and then click "Install":
 ![Step 6](screenshots/6-ha-beszel-agenet-install.webp)
 
 
@@ -51,6 +57,12 @@ After installation, open the configuration tab:
 ![Step 7](screenshots/7-ha-beszel-agenet-config.webp)
 
 ## 8. Fill in Required Configuration
+
+If you are installing `Beszel Hub` or `Beszel Hub (Test)`, you can leave the configuration empty and start the add-on right away. After it starts, open `http://<home-assistant-host>:8090` and create the first admin user.
+
+The optional `app_url` setting is the public URL of your Hub - Beszel uses it for the links it puts in alert emails, so set it if you use notifications. Careful with paths: `https://example.com/beszel` makes the Hub serve everything under `/beszel/`, and plain `http://<home-assistant-host>:8090/` stops working. See [Beszel Hub - Setup and Configuration](../beszel_hub/DOCS.md) for the details.
+
+For Agent add-ons, fill in the values below.
 
 **key** - SSH public key
 
@@ -84,7 +96,7 @@ Enter your SSH key, Hub URL, and Token:
 
 ![Step 8](screenshots/8-ha-beszel-agenet-config-fill.webp)
 
-## 9. (Optional) Configure Custom Enviromnent Variables and Volumes
+## 9. (Optional) Configure Custom Environment Variables and Volumes
 
 If you want to add custom environment variables and volume mappings you can do that here. 
 
@@ -126,10 +138,14 @@ For S.M.A.R.T. monitoring, addon logs will show detected disks:
 
 ![Step 11](screenshots/11-beszel-agent-smart-log.webp)
 
-The add-on uses two internal ports:
+The Agent add-ons use two internal ports:
 
 - `45876` for the Beszel agent connection from your Beszel Hub
 - `45877` for the internal Home Assistant watchdog healthcheck endpoint
+
+The Beszel Hub add-ons use:
+
+- `8090` for the Beszel web UI and API
 
 ## 12. (Optional) Disable Protection Mode
 If you are not seeing expected metrics, try disabling protection mode. This is mostly required for other Add-ons stats (docker stats) and S.M.A.R.T. monitoring.
@@ -149,4 +165,4 @@ For S.M.A.R.T. monitoring, you should see disk health metrics:
 - If Home Assistant reports watchdog failures, check whether the logs mention the HTTP health endpoint on port `45877`.
 - For advanced configuration, see the main documentation or open an issue on GitHub.
 
-**Enjoy monitoring your Home Assistant system with Beszel Agent!**
+**Enjoy monitoring your Home Assistant system with Beszel!**
