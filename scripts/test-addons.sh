@@ -207,7 +207,7 @@ if [ "${DO_STATIC}" -eq 1 ]; then
         fi
 
         v="$(grep '^version:' "${addon}/config.yaml" | sed -E 's/version: "(.*)"/\1/')"
-        if [ "${v%-dev}" != "${REFERENCE_VERSION}" ]; then
+        if [ "${v}" != "${REFERENCE_VERSION}" ]; then
             fail "${addon}: version ${v} does not match beszel_agent ${REFERENCE_VERSION}"; ok=0
         fi
 

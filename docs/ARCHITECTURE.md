@@ -55,7 +55,6 @@ Variants:
 | `beszel_agent_intel` | `intel_gpu_top`, `nvtop`, smartmontools | Alpine | amd64 |
 | `beszel_agent_amd` | `amdgpu.ids`, `nvtop`, smartmontools | Alpine | amd64, arm64 |
 | `beszel_agent_nvidia` | `nvtop`, smartmontools | **Debian** | amd64, arm64 |
-| `beszel_agent_dev` | - (test builds) | Alpine | amd64, arm64 |
 
 Two things drive those choices:
 
@@ -100,6 +99,6 @@ Two things drive those choices:
 └────────────────┘             └────────────────┘
 ```
 
-Variants: `beszel_hub` (standard), `beszel_hub_dev` (test builds). Both Alpine, amd64 + arm64.
+One variant: `beszel_hub`, Alpine, amd64 + arm64.
 
 Port `8090` serves the web UI, the REST API, and the `/api/health` endpoint the Home Assistant watchdog polls. The add-on is marked `backup: cold` so Home Assistant stops it while taking a backup, which keeps the SQLite database consistent in the snapshot.

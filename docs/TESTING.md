@@ -188,7 +188,6 @@ This is the phase that catches configuration-reading regressions, so run it befo
 ```bash
 ./scripts/test-e2e.sh                        # hub + the standard agent
 ./scripts/test-e2e.sh --all-agents           # hub + every agent variant at once
-./scripts/test-e2e.sh --hub beszel_hub_dev
 ./scripts/test-e2e.sh --all-agents --keep    # leave it all up to browse
 ./scripts/test-e2e.sh --clean                # remove what a previous run left
 ```
@@ -222,7 +221,6 @@ PASS  hub stored real metrics: cpu=15.38% mem=8.5% disk=4.69% agent=0.18.8 threa
   Systems reporting to this hub:
     e2e-beszel_agent             up
     e2e-beszel_agent_amd         up
-    e2e-beszel_agent_dev         up
     e2e-beszel_agent_intel       up
     e2e-beszel_agent_nvidia      up
     e2e-beszel_agent_smart       up

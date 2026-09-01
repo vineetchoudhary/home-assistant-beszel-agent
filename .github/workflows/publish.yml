@@ -15,13 +15,11 @@ on:
         options:
           - all
           - stable
-          - dev
           - smart
           - intel
           - amd
           - nvidia
           - hub
-          - hub-dev
       force_rebuild:
         description: 'Force rebuild even if version is up-to-date'
         required: false
@@ -57,14 +55,11 @@ jobs:
             echo "Changed files:"
             echo "$CHANGED_FILES"
             
-            # Longest directory names first so beszel_hub_dev wins over beszel_hub.
             for pair in \
               "beszel_agent_nvidia:nvidia" \
               "beszel_agent_intel:intel" \
               "beszel_agent_smart:smart" \
-              "beszel_agent_dev:dev" \
               "beszel_agent_amd:amd" \
-              "beszel_hub_dev:hub-dev" \
               "beszel_hub:hub"; do
               dir="${pair%%:*}"
               id="${pair##*:}"
@@ -237,13 +232,11 @@ jobs:
           # ------------------------------------------------------------------
           cat > /tmp/addons.tsv <<'EOF'
           stable	beszel_agent	home-assistant-beszel-agent	linux/amd64,linux/arm64	alpine	agent
-          dev	beszel_agent_dev	home-assistant-beszel-agent-dev	linux/amd64,linux/arm64	alpine	agent
           smart	beszel_agent_smart	home-assistant-beszel-agent-smart	linux/amd64,linux/arm64	alpine	agent
           intel	beszel_agent_intel	home-assistant-beszel-agent-intel	linux/amd64	alpine	agent
           amd	beszel_agent_amd	home-assistant-beszel-agent-amd	linux/amd64,linux/arm64	alpine	agent
           nvidia	beszel_agent_nvidia	home-assistant-beszel-agent-nvidia	linux/amd64,linux/arm64	debian	agent
           hub	beszel_hub	home-assistant-beszel-hub	linux/amd64,linux/arm64	alpine	hub
-          hub-dev	beszel_hub_dev	home-assistant-beszel-hub-dev	linux/amd64,linux/arm64	alpine	hub
           EOF
           echo "Add-on table:"
           cat /tmp/addons.tsv
@@ -437,33 +430,6 @@ jobs:
             /tmp/build-addon-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${platforms}" "${base}" "true" "push"
             echo "::endgroup::"
           done <<< "$(/tmp/select-addons.sh "${IMAGE_TYPE}")"
-
-      - name: Tag development images with latest-dev and SHA
-        if: steps.check_version.outputs.run_steps == 'true'
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
-          [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
-          SHA_SHORT=$(git rev-parse --short HEAD)
-
-          # imagetools retags the manifest list itself, so the multi-arch index is
-          # preserved. `docker tag` would flatten it to whatever arch was pulled.
-          for id in dev hub-dev; do
-            if [ "${IMAGE_TYPE}" != "all" ] && [ "${IMAGE_TYPE}" != "${id}" ]; then
-              continue
-            fi
-            suffix=$(awk -F'\t' -v want="${id}" '$1 == want {print $3}' /tmp/addons.tsv)
-            [ -n "${suffix}" ] || continue
-            IMAGE="ghcr.io/vineetchoudhary/${suffix}"
-
-            for tag in latest-dev "${SHA_SHORT}"; do
-              if docker buildx imagetools create -t "${IMAGE}:${tag}" "${IMAGE}:${VERSION}"; then
-                echo "✓ Tagged ${IMAGE}:${tag}"
-              else
-                echo "⚠ Could not tag ${IMAGE}:${tag}"
-              fi
-            done
-          done
 
       - name: Commit add-on version update
         if: steps.check_version.outputs.run_steps == 'true'

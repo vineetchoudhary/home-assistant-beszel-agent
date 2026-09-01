@@ -9,7 +9,6 @@
 #
 #   ./scripts/test-e2e.sh                  # hub + the standard agent
 #   ./scripts/test-e2e.sh --all-agents     # hub + every agent variant at once
-#   ./scripts/test-e2e.sh --hub beszel_hub_dev
 #   ./scripts/test-e2e.sh --all-agents --keep   # leave it all up to browse
 #   ./scripts/test-e2e.sh --clean               # remove anything a previous run left
 #
@@ -30,7 +29,7 @@ USER_EMAIL="e2e@example.com"
 USER_PASSWORD="e2e-test-password"
 
 usage() {
-    sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Options:

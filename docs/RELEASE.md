@@ -30,13 +30,11 @@ Run **Build and Publish** from the Actions tab to rebuild one add-on without wai
 | --- | --- |
 | `all` | every add-on (skipped if the version is already up-to-date, unless `force_rebuild`) |
 | `stable` | `beszel_agent` |
-| `dev` | `beszel_agent_dev` |
 | `smart` | `beszel_agent_smart` |
 | `intel` | `beszel_agent_intel` |
 | `amd` | `beszel_agent_amd` |
 | `nvidia` | `beszel_agent_nvidia` |
 | `hub` | `beszel_hub` |
-| `hub-dev` | `beszel_hub_dev` |
 
 The list lives in one place - the add-on table in the `Prepare build helpers` step of `publish.yml`. Adding an add-on means adding a row there (`id`, directory, image suffix, platforms, base, smoke-test kind) and a matching `image_type` choice in the `workflow_dispatch` inputs.
 

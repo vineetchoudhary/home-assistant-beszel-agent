@@ -26,35 +26,29 @@ https://github.com/vineetchoudhary/home-assistant-beszel-agent
 You should see the Beszel add-on repository listed:
 ![Step 5](screenshots/5-ha-add-ons-repo-added.webp)
 
-This repository provides eight add-ons:
+This repository provides six add-ons:
 
 ### 5.1 Beszel Hub
 Run the Beszel Hub directly inside Home Assistant for smaller or self-contained setups.
 
-### 5.2 Beszel Hub (Test)
-Development/testing version of the Hub.
-
-### 5.3 Beszel Agent
+### 5.2 Beszel Agent
 For standard monitoring
 
 ![Step 5.1](screenshots/5-beszel-agent-home-assistant.webp)
 
-### 5.4 Beszel Agent (S.M.A.R.T.)
+### 5.3 Beszel Agent (S.M.A.R.T.)
 For monitoring with S.M.A.R.T. disk health checks.
 
 ![Step 5.2](screenshots/5-beszel-agent-smart-home-assistant.webp)
 
-### 5.5 Beszel Agent (Intel GPU)
+### 5.4 Beszel Agent (Intel GPU)
 Intel GPU metrics plus S.M.A.R.T. disk health. amd64 only - the `intel_gpu_top` tool it needs is not packaged for aarch64.
 
-### 5.6 Beszel Agent (AMD GPU)
+### 5.5 Beszel Agent (AMD GPU)
 AMD GPU metrics plus S.M.A.R.T. disk health. Reads GPU stats from sysfs, so no vendor tooling is required.
 
-### 5.7 Beszel Agent (NVIDIA GPU)
+### 5.6 Beszel Agent (NVIDIA GPU)
 NVIDIA GPU metrics plus S.M.A.R.T. disk health. **Read [its documentation](../beszel_agent_nvidia/DOCS.md) before installing** - Home Assistant add-ons cannot attach an NVIDIA GPU, so the GPU half only works on a Supervised host that has been configured with the NVIDIA runtime as Docker's default. Everything else in the add-on works regardless.
-
-### 5.8 Beszel Agent (Test)
-Development/testing version
 
 ## 6. Install a Beszel Add-on
 Click on the Beszel add-on you want to install and then click "Install":
@@ -67,7 +61,7 @@ After installation, open the configuration tab:
 
 ## 8. Fill in Required Configuration
 
-If you are installing `Beszel Hub` or `Beszel Hub (Test)`, you can leave the configuration empty and start the add-on right away. After it starts, open `http://<home-assistant-host>:8090` and create the first admin user.
+If you are installing `Beszel Hub`, you can leave the configuration empty and start the add-on right away. After it starts, open `http://<home-assistant-host>:8090` and create the first admin user.
 
 The optional `app_url` setting is the public URL of your Hub - Beszel uses it for the links it puts in alert emails, so set it if you use notifications. Careful with paths: `https://example.com/beszel` makes the Hub serve everything under `/beszel/`, and plain `http://<home-assistant-host>:8090/` stops working. See [Beszel Hub - Setup and Configuration](../beszel_hub/DOCS.md) for the details.
 
