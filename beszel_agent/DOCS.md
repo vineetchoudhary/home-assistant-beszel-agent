@@ -1,23 +1,23 @@
 # Beszel Agent for Home Assistant
 
-Monitor your Home Assistant system with Beszel. This add-on runs the Beszel agent and reports stats to your Beszel Hub.
+Monitor your Home Assistant system with Beszel. This app runs the Beszel agent and reports stats to your Beszel Hub.
 
 ## What it monitors:
 
 - CPU, memory, disk, and network usage
-- Home Assistant Add-ons (via Docker API)
+- Home Assistant Apps (via Docker API)
 - Historical data with trends
 
 ## Watchdog and Healthcheck
 
-This add-on uses two internal ports:
+This app uses two internal ports:
 
 - `45876/tcp` for the Beszel agent
 - `45877/tcp` for a lightweight HTTP watchdog endpoint
 
 ## Installation and Setup
 
-Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the add-on.
+Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the app.
 
 
 ## Need Help?

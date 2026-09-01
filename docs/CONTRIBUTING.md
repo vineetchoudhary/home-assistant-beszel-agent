@@ -6,11 +6,11 @@ Thanks for helping out!
 
 Check the [beszel repository first](https://github.com/henrygd/beszel/issues), it might be a Beszel issue. 
 
-If it's specific to this add-on, please, search [existing issues](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) first. If it's new:
+If it's specific to this app, please, search [existing issues](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) first. If it's new:
 
 1. Open a new issue
 2. Include:
-   - Add-on version and HA version
+   - App version and HA version
    - What you did and what happened
    - Error messages from logs
 
@@ -26,7 +26,7 @@ Before you submit:
 1. Try it in a real Home Assistant instance
 2. Make sure your new config options work
 3. Check the logs for errors
-4. Test the add-on variant you changed if you can
+4. Test the app variant you changed if you can
 
 Test instructions are [here](TESTING.md).
 

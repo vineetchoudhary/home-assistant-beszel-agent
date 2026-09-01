@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# End-to-end test: a real Hub add-on and a real Agent add-on, talking to each
+# End-to-end test: a real Hub app and a real Agent app, talking to each
 # other.
 #
-# scripts/test-addons.sh proves each image starts. This proves the product
+# scripts/test-apps.sh proves each image starts. This proves the product
 # works: the Hub serves its API, an Agent registers itself over a universal
 # token, and real metrics arrive in the Hub's database.
 #
@@ -19,8 +19,8 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}" || exit 1
 
-HUB_ADDON="beszel_hub"
-AGENT_ADDONS="beszel_agent"
+HUB_APP="beszel_hub"
+AGENT_APPS="beszel_agent"
 ALL_AGENTS=0
 KEEP=0
 CLEAN_ONLY=0
@@ -33,8 +33,8 @@ usage() {
     cat <<'EOF'
 
 Options:
-  --hub <dir>     Hub add-on to run (default: beszel_hub)
-  --agent <dir>   Agent add-on to run; repeatable
+  --hub <dir>     Hub app to run (default: beszel_hub)
+  --agent <dir>   Agent app to run; repeatable
   --all-agents    Run every beszel_agent* variant against the one Hub
   --keep          Leave the hub and agents running, and print how to reach them
   --clean         Remove containers, networks and images left by any previous run
@@ -45,9 +45,9 @@ EOF
 AGENTS_OVERRIDDEN=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --hub)        HUB_ADDON="${2%/}"; shift ;;
-        --agent)      if [ "${AGENTS_OVERRIDDEN}" -eq 0 ]; then AGENT_ADDONS=""; AGENTS_OVERRIDDEN=1; fi
-                      AGENT_ADDONS="${AGENT_ADDONS} ${2%/}"; shift ;;
+        --hub)        HUB_APP="${2%/}"; shift ;;
+        --agent)      if [ "${AGENTS_OVERRIDDEN}" -eq 0 ]; then AGENT_APPS=""; AGENTS_OVERRIDDEN=1; fi
+                      AGENT_APPS="${AGENT_APPS} ${2%/}"; shift ;;
         --all-agents) ALL_AGENTS=1 ;;
         --keep)       KEEP=1 ;;
         --clean)      CLEAN_ONLY=1 ;;
@@ -58,9 +58,9 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "${ALL_AGENTS}" -eq 1 ]; then
-    AGENT_ADDONS=""
+    AGENT_APPS=""
     while IFS= read -r d; do
-        [ -n "${d}" ] && AGENT_ADDONS="${AGENT_ADDONS} ${d}"
+        [ -n "${d}" ] && AGENT_APPS="${AGENT_APPS} ${d}"
     done <<EOF
 $(find . -maxdepth 2 -name config.yaml -path './beszel_agent*' -exec dirname {} \; | sed 's|^\./||' | sort)
 EOF
@@ -157,7 +157,7 @@ if [ "${CLEAN_ONLY}" -eq 1 ]; then
     exit 0
 fi
 
-addon_base() {
+app_base() {
     if grep -q 'apt-get' "$1/Dockerfile"; then
         echo "ghcr.io/home-assistant/base-debian:latest"
     else
@@ -172,7 +172,7 @@ case "${HOST_ARCH}" in
     *)             HOST_HA_ARCH="" ;;
 esac
 
-addon_platform() {
+app_platform() {
     _arches="$(python3 -c "
 import yaml,sys
 print(' '.join(yaml.safe_load(open(sys.argv[1]+'/config.yaml'))['arch']))" "$1")"
@@ -184,11 +184,11 @@ print(' '.join(yaml.safe_load(open(sys.argv[1]+'/config.yaml'))['arch']))" "$1")
     [ "$1" = "amd64" ] && echo "linux/amd64" || echo "linux/arm64"
 }
 
-build_addon() {
+build_app() {
     _dir="$1"
     _img="beszel-e2e/${_dir}:${RUN_ID}"
-    if ! docker build --platform "$(addon_platform "${_dir}")" \
-            --build-arg "BUILD_FROM=$(addon_base "${_dir}")" \
+    if ! docker build --platform "$(app_platform "${_dir}")" \
+            --build-arg "BUILD_FROM=$(app_base "${_dir}")" \
             -t "${_img}" "${_dir}/" >/tmp/e2e-build-${RUN_ID}.log 2>&1; then
         fail "${_dir}: build failed"
         tail -15 /tmp/e2e-build-${RUN_ID}.log | sed 's/^/        /'
@@ -236,13 +236,13 @@ head1 "Build images"
 # ---------------------------------------------------------------------------
 docker network create "${NETWORK}" >/dev/null 2>&1
 
-HUB_IMAGE="$(build_addon "${HUB_ADDON}")" || exit 1
+HUB_IMAGE="$(build_app "${HUB_APP}")" || exit 1
 IMAGES="${IMAGES} ${HUB_IMAGE}"
-pass "${HUB_ADDON}: built"
+pass "${HUB_APP}: built"
 
 AGENT_IMAGES=""
-for a in ${AGENT_ADDONS}; do
-    img="$(build_addon "${a}")" || exit 1
+for a in ${AGENT_APPS}; do
+    img="$(build_app "${a}")" || exit 1
     IMAGES="${IMAGES} ${img}"
     AGENT_IMAGES="${AGENT_IMAGES} ${a}=${img}"
     pass "${a}: built"
@@ -257,7 +257,7 @@ head1 "Start the Hub"
 CONTAINERS="${CONTAINERS} ${HUB_NAME}"
 docker run -d --name "${HUB_NAME}" --network "${NETWORK}" --network-alias hub \
     -p "${HUB_PORT}:8090" \
-    --platform "$(addon_platform "${HUB_ADDON}")" \
+    --platform "$(app_platform "${HUB_APP}")" \
     -e BESZEL_HUB_USER_EMAIL="${USER_EMAIL}" \
     -e BESZEL_HUB_USER_PASSWORD="${USER_PASSWORD}" \
     "${HUB_IMAGE}" >/dev/null 2>&1
@@ -313,10 +313,10 @@ head1 "Connect agents"
 # ---------------------------------------------------------------------------
 EXPECTED=""
 for pair in ${AGENT_IMAGES}; do
-    addon="${pair%%=*}"
+    app="${pair%%=*}"
     img="${pair##*=}"
-    host="e2e-${addon}"
-    cname="beszel-e2e-${addon}-${RUN_ID}"
+    host="e2e-${app}"
+    cname="beszel-e2e-${app}-${RUN_ID}"
     CONTAINERS="${CONTAINERS} ${cname}"
     EXPECTED="${EXPECTED} ${host}"
 
@@ -324,19 +324,19 @@ for pair in ${AGENT_IMAGES}; do
     # this host shares - without a distinct fingerprint the hub treats each
     # agent as the same system reconnecting and closes the duplicate. A saved
     # fingerprint file in the data directory takes precedence, so seed one.
-    fpdir="${TMPROOT}/${addon}"
+    fpdir="${TMPROOT}/${app}"
     mkdir -p "${fpdir}"
-    printf '%s' "$(printf '%s' "e2e-${addon}-${RUN_ID}" | shasum -a 256 | cut -c1-48)" \
+    printf '%s' "$(printf '%s' "e2e-${app}-${RUN_ID}" | shasum -a 256 | cut -c1-48)" \
         > "${fpdir}/fingerprint"
 
     docker run -d --name "${cname}" --network "${NETWORK}" --hostname "${host}" \
-        --platform "$(addon_platform "${addon}")" \
+        --platform "$(app_platform "${app}")" \
         -v "${fpdir}:/var/lib/beszel-agent" \
         -e BESZEL_KEY="${HUB_KEY}" \
         -e BESZEL_HUB_URL="http://hub:8090" \
         -e BESZEL_TOKEN="${UNIVERSAL_TOKEN}" \
         "${img}" >/dev/null 2>&1
-    info "${addon}: started as host '${host}'"
+    info "${app}: started as host '${host}'"
 done
 
 # ---------------------------------------------------------------------------
@@ -394,7 +394,7 @@ head1 "Summary"
 # ---------------------------------------------------------------------------
 n=0
 for _ in ${EXPECTED}; do n=$((n + 1)); done
-printf '  hub: %s, agents: %d\n' "${HUB_ADDON}" "${n}"
+printf '  hub: %s, agents: %d\n' "${HUB_APP}" "${n}"
 if [ "${FAILURES}" -eq 0 ]; then
     printf '  %sEnd-to-end test passed%s\n\n' "${C_GRN}" "${C_OFF}"
     exit 0

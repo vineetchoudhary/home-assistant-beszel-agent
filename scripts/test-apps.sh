@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# Build and test every Beszel add-on in this repository.
+# Build and test every Beszel app in this repository.
 #
-# Everything is derived from the add-on directories themselves - the arch list
+# Everything is derived from the app directories themselves - the arch list
 # from config.yaml, the base image from whether the Dockerfile uses apt-get - so
 # adding a new beszel_* directory is picked up automatically with no edits here.
 #
-#   ./scripts/test-addons.sh                 # static checks + build + smoke test
-#   ./scripts/test-addons.sh --static        # no Docker, just the fast checks
-#   ./scripts/test-addons.sh --supervisor    # also run the mock Supervisor test
-#   ./scripts/test-addons.sh beszel_hub      # only these add-ons
+#   ./scripts/test-apps.sh                 # static checks + build + smoke test
+#   ./scripts/test-apps.sh --static        # no Docker, just the fast checks
+#   ./scripts/test-apps.sh --supervisor    # also run the mock Supervisor test
+#   ./scripts/test-apps.sh beszel_hub      # only these apps
 #
 # Written for bash 3.2 so it runs on stock macOS as well as CI.
 
@@ -29,7 +29,7 @@ KEEP_IMAGES=0
 SELECTED=""
 
 usage() {
-    sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Options:
@@ -80,24 +80,24 @@ record() { RESULTS="${RESULTS}$1|$2|$3
 # ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
-ADDONS=""
+APPS=""
 while IFS= read -r dir; do
     [ -n "${dir}" ] || continue
     if [ -n "${SELECTED## }" ]; then
         case " ${SELECTED} " in *" ${dir} "*) ;; *) continue ;; esac
     fi
-    ADDONS="${ADDONS} ${dir}"
+    APPS="${APPS} ${dir}"
 done <<EOF
 $(find . -maxdepth 2 -name config.yaml -path './beszel_*' -exec dirname {} \; | sed 's|^\./||' | sort)
 EOF
 
-if [ -z "${ADDONS## }" ]; then
-    echo "No add-ons matched." >&2
+if [ -z "${APPS## }" ]; then
+    echo "No apps matched." >&2
     exit 2
 fi
 
 # The value of `arch:` in config.yaml, space separated.
-addon_arches() {
+app_arches() {
     python3 -c "
 import yaml,sys
 print(' '.join(yaml.safe_load(open(sys.argv[1]+'/config.yaml'))['arch']))" "$1"
@@ -105,7 +105,7 @@ print(' '.join(yaml.safe_load(open(sys.argv[1]+'/config.yaml'))['arch']))" "$1"
 
 # Debian base if the Dockerfile installs with apt-get, Alpine otherwise. Derived
 # rather than configured so the two cannot drift apart.
-addon_base() {
+app_base() {
     if grep -q 'apt-get' "$1/Dockerfile"; then
         echo "ghcr.io/home-assistant/base-debian:latest"
     else
@@ -113,7 +113,7 @@ addon_base() {
     fi
 }
 
-addon_kind() {
+app_kind() {
     case "$1" in
         beszel_hub*) echo "hub" ;;
         *)           echo "agent" ;;
@@ -136,9 +136,9 @@ ha_arch_to_platform() {
 }
 
 # Prefer the host architecture so the build is native; fall back to the first
-# architecture the add-on supports (emulated, and noted as such).
-addon_platform() {
-    _arches="$(addon_arches "$1")"
+# architecture the app supports (emulated, and noted as such).
+app_platform() {
+    _arches="$(app_arches "$1")"
     for a in ${_arches}; do
         if [ "${a}" = "${HOST_HA_ARCH}" ]; then
             ha_arch_to_platform "${a}"
@@ -150,7 +150,7 @@ addon_platform() {
     ha_arch_to_platform "$1"
 }
 
-TEST_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@test-addons"
+TEST_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@test-apps"
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -189,46 +189,46 @@ if [ "${DO_STATIC}" -eq 1 ]; then
     REFERENCE_VERSION="$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')"
     info "reference version (beszel_agent): ${REFERENCE_VERSION}"
 
-    for addon in ${ADDONS}; do
+    for app in ${APPS}; do
         ok=1
 
-        if ! python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "${addon}/config.yaml" 2>/dev/null; then
-            fail "${addon}: config.yaml is not valid YAML"; ok=0
+        if ! python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "${app}/config.yaml" 2>/dev/null; then
+            fail "${app}: config.yaml is not valid YAML"; ok=0
         fi
 
         for f in config.yaml Dockerfile run.sh DOCS.md CHANGELOG.md beszel_version icon.png logo.png; do
-            if [ ! -f "${addon}/${f}" ]; then
-                fail "${addon}: missing ${f}"; ok=0
+            if [ ! -f "${app}/${f}" ]; then
+                fail "${app}: missing ${f}"; ok=0
             fi
         done
 
-        if ! bash -n "${addon}/run.sh" 2>/dev/null; then
-            fail "${addon}: run.sh has a syntax error"; ok=0
+        if ! bash -n "${app}/run.sh" 2>/dev/null; then
+            fail "${app}: run.sh has a syntax error"; ok=0
         fi
 
-        v="$(grep '^version:' "${addon}/config.yaml" | sed -E 's/version: "(.*)"/\1/')"
+        v="$(grep '^version:' "${app}/config.yaml" | sed -E 's/version: "(.*)"/\1/')"
         if [ "${v}" != "${REFERENCE_VERSION}" ]; then
-            fail "${addon}: version ${v} does not match beszel_agent ${REFERENCE_VERSION}"; ok=0
+            fail "${app}: version ${v} does not match beszel_agent ${REFERENCE_VERSION}"; ok=0
         fi
 
-        bv="$(tr -d '[:space:]' < "${addon}/beszel_version")"
+        bv="$(tr -d '[:space:]' < "${app}/beszel_version")"
         rbv="$(tr -d '[:space:]' < beszel_agent/beszel_version)"
         if [ "${bv}" != "${rbv}" ]; then
-            fail "${addon}: beszel_version ${bv} does not match beszel_agent ${rbv}"; ok=0
+            fail "${app}: beszel_version ${bv} does not match beszel_agent ${rbv}"; ok=0
         fi
 
-        if grep -q '{arch}' "${addon}/config.yaml"; then
-            fail "${addon}: config.yaml still uses the {arch} placeholder"; ok=0
+        if grep -q '{arch}' "${app}/config.yaml"; then
+            fail "${app}: config.yaml still uses the {arch} placeholder"; ok=0
         fi
 
-        if grep -Eq '^host_pid:[[:space:]]*true' "${addon}/config.yaml"; then
-            fail "${addon}: host_pid breaks s6-overlay (init must be PID 1)"; ok=0
+        if grep -Eq '^host_pid:[[:space:]]*true' "${app}/config.yaml"; then
+            fail "${app}: host_pid breaks s6-overlay (init must be PID 1)"; ok=0
         fi
 
-        [ "${ok}" -eq 1 ] && pass "${addon}: config, files, version, image name"
+        [ "${ok}" -eq 1 ] && pass "${app}: config, files, version, image name"
     done
 
-    # Image names must be unique, or two add-ons would overwrite each other.
+    # Image names must be unique, or two apps would overwrite each other.
     dupes="$(grep -h '^image:' beszel_*/config.yaml | sort | uniq -d)"
     if [ -n "${dupes}" ]; then
         fail "duplicate image names: ${dupes}"
@@ -268,9 +268,9 @@ if [ "${DO_STATIC}" -eq 1 ]; then
     fi
     if [ -n "${HADOLINT}" ]; then
         hl_out=""
-        for addon in ${ADDONS}; do
-            out="$(${HADOLINT} < "${addon}/Dockerfile" 2>&1)"
-            [ -n "${out}" ] && hl_out="${hl_out}${addon}: ${out}
+        for app in ${APPS}; do
+            out="$(${HADOLINT} < "${app}/Dockerfile" 2>&1)"
+            [ -n "${out}" ] && hl_out="${hl_out}${app}: ${out}
 "
         done
         if [ -z "${hl_out}" ]; then
@@ -297,27 +297,27 @@ fi
 
 if [ "${DO_BUILD}" -eq 1 ]; then
     head1 "Build images"
-    for addon in ${ADDONS}; do
-        base="$(addon_base "${addon}")"
-        platform="$(addon_platform "${addon}")"
-        image="beszel-addon-test/${addon}:local"
+    for app in ${APPS}; do
+        base="$(app_base "${app}")"
+        platform="$(app_platform "${app}")"
+        image="beszel-app-test/${app}:local"
         note=""
-        case " $(addon_arches "${addon}") " in
+        case " $(app_arches "${app}") " in
             *" ${HOST_HA_ARCH} "*) ;;
-            *) note=" ${C_YEL}(emulated: add-on does not support ${HOST_HA_ARCH})${C_OFF}" ;;
+            *) note=" ${C_YEL}(emulated: app does not support ${HOST_HA_ARCH})${C_OFF}" ;;
         esac
 
-        info "${addon}: ${platform} from $(basename "${base}")${note}"
+        info "${app}: ${platform} from $(basename "${base}")${note}"
         if docker build --platform "${platform}" --build-arg "BUILD_FROM=${base}" \
-                -t "${image}" "${addon}/" >/tmp/beszel-build-$$.log 2>&1; then
+                -t "${image}" "${app}/" >/tmp/beszel-build-$$.log 2>&1; then
             CREATED_IMAGES="${CREATED_IMAGES} ${image}"
             size="$(docker images "${image}" --format '{{.Size}}')"
-            pass "${addon}: built (${size})"
-            record "${addon}" build ok
+            pass "${app}: built (${size})"
+            record "${app}" build ok
         else
-            fail "${addon}: build failed"
+            fail "${app}: build failed"
             tail -20 /tmp/beszel-build-$$.log | sed 's/^/        /'
-            record "${addon}" build FAIL
+            record "${app}" build FAIL
         fi
         rm -f /tmp/beszel-build-$$.log
     done
@@ -326,13 +326,13 @@ fi
 if [ "${DO_SMOKE}" -eq 1 ]; then
     head1 "Smoke test"
     port="$(free_port 18090)"
-    for addon in ${ADDONS}; do
-        image="beszel-addon-test/${addon}:local"
-        docker image inspect "${image}" >/dev/null 2>&1 || { skip "${addon}: no image to run"; continue; }
+    for app in ${APPS}; do
+        image="beszel-app-test/${app}:local"
+        docker image inspect "${image}" >/dev/null 2>&1 || { skip "${app}: no image to run"; continue; }
 
-        platform="$(addon_platform "${addon}")"
-        kind="$(addon_kind "${addon}")"
-        cname="beszel-test-$$-${addon}"
+        platform="$(app_platform "${app}")"
+        kind="$(app_kind "${app}")"
+        cname="beszel-test-$$-${app}"
         CREATED_CONTAINERS="${CREATED_CONTAINERS} ${cname}"
 
         if [ "${kind}" = "hub" ]; then
@@ -356,7 +356,7 @@ if [ "${DO_SMOKE}" -eq 1 ]; then
                 fi
                 sleep 1
             done
-            [ "${healthy}" -eq 1 ] || { fail "${addon}: /api/health never responded"; ok=0; }
+            [ "${healthy}" -eq 1 ] || { fail "${app}: /api/health never responded"; ok=0; }
         else
             sleep 8
         fi
@@ -365,23 +365,23 @@ if [ "${DO_SMOKE}" -eq 1 ]; then
         status="$(docker inspect "${cname}" --format '{{.State.Status}}' 2>/dev/null)"
 
         if [ "${kind}" = "hub" ]; then
-            echo "${logs}" | grep -q "Starting Beszel Hub" || { fail "${addon}: hub did not start"; ok=0; }
+            echo "${logs}" | grep -q "Starting Beszel Hub" || { fail "${app}: hub did not start"; ok=0; }
         else
-            echo "${logs}" | grep -q "Starting Beszel Agent" || { fail "${addon}: agent did not start"; ok=0; }
-            echo "${logs}" | grep -q "Starting Beszel Agent on port 45876" || { fail "${addon}: agent never reached its listen port"; ok=0; }
+            echo "${logs}" | grep -q "Starting Beszel Agent" || { fail "${app}: agent did not start"; ok=0; }
+            echo "${logs}" | grep -q "Starting Beszel Agent on port 45876" || { fail "${app}: agent never reached its listen port"; ok=0; }
         fi
 
         if echo "${logs}" | grep -q "cannot execute: required file not found"; then
-            fail "${addon}: binary will not execute (architecture or libc mismatch)"; ok=0
+            fail "${app}: binary will not execute (architecture or libc mismatch)"; ok=0
         fi
-        [ "${status}" = "running" ] || { fail "${addon}: container is ${status:-gone}, expected running"; ok=0; }
+        [ "${status}" = "running" ] || { fail "${app}: container is ${status:-gone}, expected running"; ok=0; }
 
         if [ "${ok}" -eq 1 ]; then
-            pass "${addon}: starts and stays running"
-            record "${addon}" smoke ok
+            pass "${app}: starts and stays running"
+            record "${app}" smoke ok
         else
             echo "${logs}" | tail -15 | sed 's/^/        /'
-            record "${addon}" smoke FAIL
+            record "${app}" smoke FAIL
         fi
 
         docker rm -f "${cname}" >/dev/null 2>&1
@@ -392,7 +392,7 @@ fi
 # Mock Supervisor integration
 #
 # Everything above uses the BESZEL_* environment overrides, which bypass bashio
-# entirely. This phase stands up a fake Supervisor API so the add-ons take the
+# entirely. This phase stands up a fake Supervisor API so the apps take the
 # path real users take: bashio reading options over HTTP.
 # ---------------------------------------------------------------------------
 if [ "${DO_SUPERVISOR}" -eq 1 ]; then
@@ -455,14 +455,14 @@ EOF
         CREATED_NETWORK="beszel-test-net-$$"
         docker network create "${CREATED_NETWORK}" >/dev/null 2>&1
 
-        for addon in ${ADDONS}; do
-            image="beszel-addon-test/${addon}:local"
-            docker image inspect "${image}" >/dev/null 2>&1 || { skip "${addon}: no image to run"; continue; }
+        for app in ${APPS}; do
+            image="beszel-app-test/${app}:local"
+            docker image inspect "${image}" >/dev/null 2>&1 || { skip "${app}: no image to run"; continue; }
 
-            kind="$(addon_kind "${addon}")"
-            platform="$(addon_platform "${addon}")"
-            mock="beszel-test-$$-mock-${addon}"
-            cname="beszel-test-$$-sv-${addon}"
+            kind="$(app_kind "${app}")"
+            platform="$(app_platform "${app}")"
+            mock="beszel-test-$$-mock-${app}"
+            cname="beszel-test-$$-sv-${app}"
             CREATED_CONTAINERS="${CREATED_CONTAINERS} ${mock} ${cname}"
 
             docker run -d --name "${mock}" --network "${CREATED_NETWORK}" \
@@ -482,27 +482,27 @@ EOF
 
             if [ "${kind}" = "hub" ]; then
                 echo "${logs}" | grep -q "App URL: https://beszel.example.com" \
-                    || { fail "${addon}: app_url was not read from the Supervisor API"; ok=0; }
+                    || { fail "${app}: app_url was not read from the Supervisor API"; ok=0; }
             else
                 echo "${logs}" | grep -q "Hub URL: http://hub.invalid:8090" \
-                    || { fail "${addon}: hub_url was not read from the Supervisor API"; ok=0; }
+                    || { fail "${app}: hub_url was not read from the Supervisor API"; ok=0; }
                 echo "${logs}" | grep -q "Token configured" \
-                    || { fail "${addon}: token was not read from the Supervisor API"; ok=0; }
+                    || { fail "${app}: token was not read from the Supervisor API"; ok=0; }
             fi
 
             # A malformed name must be skipped with a warning, never abort the
-            # add-on - `export` fails on it and run.sh runs under `set -e`.
+            # app - `export` fails on it and run.sh runs under `set -e`.
             echo "${logs}" | grep -q "is not a valid variable name" \
-                || { fail "${addon}: malformed environment_vars name was not rejected"; ok=0; }
+                || { fail "${app}: malformed environment_vars name was not rejected"; ok=0; }
             [ "${status}" = "running" ] \
-                || { fail "${addon}: container is ${status:-gone} after reading options"; ok=0; }
+                || { fail "${app}: container is ${status:-gone} after reading options"; ok=0; }
 
             if [ "${ok}" -eq 1 ]; then
-                pass "${addon}: reads options via bashio, survives a bad env var name"
-                record "${addon}" supervisor ok
+                pass "${app}: reads options via bashio, survives a bad env var name"
+                record "${app}" supervisor ok
             else
                 echo "${logs}" | tail -15 | sed 's/^/        /'
-                record "${addon}" supervisor FAIL
+                record "${app}" supervisor FAIL
             fi
 
             docker rm -f "${cname}" "${mock}" >/dev/null 2>&1
@@ -515,8 +515,8 @@ fi
 # ---------------------------------------------------------------------------
 head1 "Summary"
 n=0
-for addon in ${ADDONS}; do n=$((n + 1)); done
-printf '  %d add-on(s) checked\n' "${n}"
+for app in ${APPS}; do n=$((n + 1)); done
+printf '  %d app(s) checked\n' "${n}"
 [ "${SKIPPED}" -gt 0 ] && printf '  %s%d check(s) skipped%s\n' "${C_YEL}" "${SKIPPED}" "${C_OFF}"
 
 if [ "${FAILURES}" -eq 0 ]; then

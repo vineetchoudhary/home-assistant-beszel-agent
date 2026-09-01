@@ -36,7 +36,7 @@ See the upstream Beszel environment variable reference for supported Hub options
 
 Names may be given with or without Beszel's `BESZEL_HUB_` prefix; the prefixed form wins if you set both.
 
-> **Values are stored in plain text** in the add-on options and are included in Home Assistant backups. Avoid putting long-lived secrets here where you can.
+> **Values are stored in plain text** in the app options and are included in Home Assistant backups. Avoid putting long-lived secrets here where you can.
 
 ### Creating the first user
 
@@ -54,8 +54,8 @@ These are read by a one-time database migration, so **adding them later has no e
 
 ## Getting started
 
-1. Install and start the add-on.
 2. Open the web UI at `http://<home-assistant-host>:8090`.
+1. Install and start the app.
 3. Create the first admin user when prompted.
 4. Add systems from the Beszel UI and point Agents at this Hub.
 
@@ -68,5 +68,5 @@ These are read by a one-time database migration, so **adding them later has no e
 
 ## Need Help?
 
-- Report add-on issues on GitHub: https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues
+- Report app issues on GitHub: https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues
 - Check the upstream Beszel docs: https://github.com/henrygd/beszel

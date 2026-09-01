@@ -1,12 +1,12 @@
-# Beszel Add-ons for Home Assistant
+# Beszel for Home Assistant
 
-Run Beszel inside Home Assistant with add-ons for both the Hub and the Agent. Monitor your Home Assistant system and other hosts with a lightweight monitoring stack.
+Run Beszel inside Home Assistant with apps for both the Hub and the Agent. Monitor your Home Assistant system and other hosts with a lightweight monitoring stack.
 
-## Available Add-ons
+## Available Apps
 
-This repository provides six add-ons:
+This repository provides six apps:
 
-| Add-on | What it adds | Architectures |
+| App | What it adds | Architectures |
 | --- | --- | --- |
 | **Beszel Hub** | The Beszel web UI and API, inside Home Assistant | amd64, aarch64 |
 | **Beszel Agent** | Standard lightweight monitoring | amd64, aarch64 |
@@ -56,7 +56,7 @@ Or add it manually by following the [step-by-step installation and setup guide w
 - You want GPU metrics as well as disk health - they all include S.M.A.R.T.
 - Pick **Intel GPU** for Intel integrated or Arc graphics (amd64 only)
 - Pick **AMD GPU** for Radeon cards - it reads sysfs, so no vendor tooling is needed
-- Pick **NVIDIA GPU** only after reading [its caveats](beszel_agent_nvidia/DOCS.md); Home Assistant cannot attach an NVIDIA GPU to an add-on except on a Supervised host configured with the NVIDIA runtime as Docker's default
+- Pick **NVIDIA GPU** only after reading [its caveats](beszel_agent_nvidia/DOCS.md); Home Assistant cannot attach an NVIDIA GPU to an app except on a Supervised host configured with the NVIDIA runtime as Docker's default
 
 All GPU variants need **Protection mode disabled** to reach GPU and disk devices.
 

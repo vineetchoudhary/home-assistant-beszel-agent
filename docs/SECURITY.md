@@ -11,7 +11,7 @@ Only the latest version gets security fixes. If you're behind, update to get the
 | Latest  | :white_check_mark: |
 | Older   | :x:                |
 
-## Found a Security Issue in add-on?
+## Found a Security Issue in app?
 
 **Please don't open a public issue.** That just tips off the bad actors.
 

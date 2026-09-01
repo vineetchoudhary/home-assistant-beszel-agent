@@ -1,18 +1,18 @@
-# Beszel Add-ons Installation & Setup Guide
+# Beszel Apps Installation & Setup Guide
 
-This guide walks you through installing and configuring the Beszel add-ons for Home Assistant. The screenshots focus on the Agent add-ons, but the repository also includes Beszel Hub add-ons.
+This guide walks you through installing and configuring the Beszel apps for Home Assistant. The screenshots focus on the Agent apps, but the repository also includes Beszel Hub apps.
 
-## 1. Open Home Assistant Add-ons
-Open your Home Assistant instance and navigate to Settings. Click on "Add-ons":
+## 1. Open Home Assistant Apps
+Open your Home Assistant instance and navigate to Settings. Click on "Apps":
 ![Step 1](screenshots/1-ha-settings.webp)
 
-## 2. Open Add-ons Store
-Click on "Add-on Store" button on bottom right:
-![Step 2](screenshots/2-ha-add-ons.webp)
+## 2. Open App Store
+Click on "App Store" button on bottom right:
+![Step 2](screenshots/2-ha-apps.webp)
 
-## 3. Open Add-ons Store Repositories
+## 3. Open App Store Repositories
 Click on the three dots in the top right and select "Repositories":
-![Step 3](screenshots/3-ha-add-ons-store-repo.webp)
+![Step 3](screenshots/3-ha-apps-store-repo.webp)
 
 ## 4. Add Custom Repository
 Paste following URL and click "Add" button:
@@ -20,13 +20,13 @@ Paste following URL and click "Add" button:
 https://github.com/vineetchoudhary/home-assistant-beszel-agent
 ```
 
-![Step 4](screenshots/4-ha-add-ons-add-repo.webp)
+![Step 4](screenshots/4-ha-apps-add-repo.webp)
 
 ## 5. Confirm Repository Added
-You should see the Beszel add-on repository listed:
-![Step 5](screenshots/5-ha-add-ons-repo-added.webp)
+You should see the Beszel app repository listed:
+![Step 5](screenshots/5-ha-apps-repo-added.webp)
 
-This repository provides six add-ons:
+This repository provides six apps:
 
 ### 5.1 Beszel Hub
 Run the Beszel Hub directly inside Home Assistant for smaller or self-contained setups.
@@ -48,24 +48,24 @@ Intel GPU metrics plus S.M.A.R.T. disk health. amd64 only - the `intel_gpu_top` 
 AMD GPU metrics plus S.M.A.R.T. disk health. Reads GPU stats from sysfs, so no vendor tooling is required.
 
 ### 5.6 Beszel Agent (NVIDIA GPU)
-NVIDIA GPU metrics plus S.M.A.R.T. disk health. **Read [its documentation](../beszel_agent_nvidia/DOCS.md) before installing** - Home Assistant add-ons cannot attach an NVIDIA GPU, so the GPU half only works on a Supervised host that has been configured with the NVIDIA runtime as Docker's default. Everything else in the add-on works regardless.
+NVIDIA GPU metrics plus S.M.A.R.T. disk health. **Read [its documentation](../beszel_agent_nvidia/DOCS.md) before installing** - Home Assistant apps cannot attach an NVIDIA GPU, so the GPU half only works on a Supervised host that has been configured with the NVIDIA runtime as Docker's default. Everything else in the app works regardless.
 
-## 6. Install a Beszel Add-on
-Click on the Beszel add-on you want to install and then click "Install":
+## 6. Install a Beszel App
+Click on the Beszel app you want to install and then click "Install":
 ![Step 6](screenshots/6-ha-beszel-agenet-install.webp)
 
 
-## 7. Open Add-on Configuration
+## 7. Open App Configuration
 After installation, open the configuration tab:
 ![Step 7](screenshots/7-ha-beszel-agenet-config.webp)
 
 ## 8. Fill in Required Configuration
 
-If you are installing `Beszel Hub`, you can leave the configuration empty and start the add-on right away. After it starts, open `http://<home-assistant-host>:8090` and create the first admin user.
+If you are installing `Beszel Hub`, you can leave the configuration empty and start the app right away. After it starts, open `http://<home-assistant-host>:8090` and create the first admin user.
 
 The optional `app_url` setting is the public URL of your Hub - Beszel uses it for the links it puts in alert emails, so set it if you use notifications. Careful with paths: `https://example.com/beszel` makes the Hub serve everything under `/beszel/`, and plain `http://<home-assistant-host>:8090/` stops working. See [Beszel Hub - Setup and Configuration](../beszel_hub/DOCS.md) for the details.
 
-For Agent add-ons, fill in the values below.
+For Agent apps, fill in the values below.
 
 **key** - SSH public key
 
@@ -117,7 +117,7 @@ environment_vars:
 
 Check available beszel agent environment variables [here](https://www.beszel.dev/guide/environment-variables#agent).
 
-**custom_volumes** - Check that a path is visible to the add-on
+**custom_volumes** - Check that a path is visible to the app
 
 ```yaml
 custom_volumes:
@@ -125,41 +125,41 @@ custom_volumes:
     container_path: "/mnt/data:ro"
 ```
 
-> **This option does not mount anything.** Home Assistant builds an add-on's
-> mounts from the add-on's own `config.yaml`, and it does not allow an add-on to
+> **This option does not mount anything.** Home Assistant builds an app's
+> mounts from the app's own `config.yaml`, and it does not allow an app to
 > mount an arbitrary host path chosen from its options. The entries here are only
-> checked for existence inside the add-on and reported in the log, which is useful
+> checked for existence inside the app and reported in the log, which is useful
 > for confirming a path Home Assistant already shares. If the log says a path is
-> not present, no setting in this add-on can make it appear.
+> not present, no setting in this app can make it appear.
 
 ![Step 9](screenshots/9-ha-beszel-agenet-custom-volumes.webp)
 
-## 10. Start the Add-on
+## 10. Start the App
 Navigate back to the "Info" tab and click "Start":
 ![Step 10](screenshots/10-ha-beszel-agenet-install-success.webp)
 
-## 11. Observe Add-on Running
-You should see the add-on running successfully (You can check the logs for connection status).
+## 11. Observe App Running
+You should see the app running successfully (You can check the logs for connection status).
 ![Step 11](screenshots/11-ha-beszel-agenet-start.webp)
 
-For S.M.A.R.T. monitoring, addon logs will show detected disks:
+For S.M.A.R.T. monitoring, app logs will show detected disks:
 
 ![Step 11](screenshots/11-beszel-agent-smart-log.webp)
 
-The Agent add-ons use two internal ports:
+The Agent apps use two internal ports:
 
 - `45876` for the Beszel agent connection from your Beszel Hub
 - `45877` for the internal Home Assistant watchdog healthcheck endpoint
 
-The Beszel Hub add-ons use:
+The Beszel Hub apps use:
 
 - `8090` for the Beszel web UI and API
 
 ## 12. (Optional) Disable Protection Mode
-If you are not seeing expected metrics, try disabling protection mode. It is required for other Add-ons stats (docker stats), S.M.A.R.T. monitoring on every variant, and Intel Arc/Xe GPUs. Plain GPU device access does not need it - Home Assistant applies the `/dev/dri` device rules either way - but `full_access` and host PID access are only granted to an unprotected add-on.
+If you are not seeing expected metrics, try disabling protection mode. It is required for other Apps stats (docker stats), S.M.A.R.T. monitoring on every variant, and Intel Arc/Xe GPUs. Plain GPU device access does not need it - Home Assistant applies the `/dev/dri` device rules either way - but `full_access` and host PID access are only granted to an unprotected app.
 ![Step 12](screenshots/12-ha-beszel-agenet-protection-mode.webp)
 
-Protection Mode restricts add-on access to the host system. It's a security feature, but it limits what metrics Beszel can collect. Only disable it if you trust the add-on and beszel agent - it's open source, but disabling protection does give it broader system access.
+Protection Mode restricts app access to the host system. It's a security feature, but it limits what metrics Beszel can collect. Only disable it if you trust the app and beszel agent - it's open source, but disabling protection does give it broader system access.
 
 ## 13. Verify Metrics in Beszel Hub
 Log in to your Beszel Hub instance and verify that metrics from your Home Assistant instance are being received:
@@ -169,7 +169,7 @@ For S.M.A.R.T. monitoring, you should see disk health metrics:
 ![Step 13](screenshots/13-beszel-smart.webp)
 
 ## Troubleshooting & Support
-- If you encounter issues, check the add-on logs for errors.
+- If you encounter issues, check the app logs for errors.
 - If Home Assistant reports watchdog failures, check whether the logs mention the HTTP health endpoint on port `45877`.
 - For advanced configuration, see the main documentation or open an issue on GitHub.
 

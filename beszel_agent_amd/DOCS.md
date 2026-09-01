@@ -1,22 +1,22 @@
 # Beszel Agent (AMD GPU) for Home Assistant
 
-Monitor your Home Assistant system with Beszel, including **AMD GPU** metrics and **S.M.A.R.T. disk health**. This add-on runs the Beszel agent with the AMD GPU name database, `nvtop`, and smartmontools, and reports stats to your Beszel Hub.
+Monitor your Home Assistant system with Beszel, including **AMD GPU** metrics and **S.M.A.R.T. disk health**. This app runs the Beszel agent with the AMD GPU name database, `nvtop`, and smartmontools, and reports stats to your Beszel Hub.
 
 ## What it monitors:
 
 - CPU, memory, disk, and network usage
-- Home Assistant Add-ons (via Docker API)
+- Home Assistant Apps (via Docker API)
 - AMD GPU utilisation, temperature, power, and memory
 - S.M.A.R.T. disk health data
 - Historical data with trends
 
 ## Requirements
 
-**Protection mode is only needed for S.M.A.R.T. here.** AMD GPU stats come from sysfs, and the `/dev/dri` device rules that `video: true` requests are applied whether or not protection is on - so GPU monitoring generally works with protection left enabled. Disk access for S.M.A.R.T. needs `full_access`, which Home Assistant honours only for an unprotected add-on.
+**Protection mode is only needed for S.M.A.R.T. here.** AMD GPU stats come from sysfs, and the `/dev/dri` device rules that `video: true` requests are applied whether or not protection is on - so GPU monitoring generally works with protection left enabled. Disk access for S.M.A.R.T. needs `full_access`, which Home Assistant honours only for an unprotected app.
 
-Unlike the Intel variant, AMD monitoring needs no vendor tooling: Beszel's `amd_sysfs` collector reads the numbers straight out of `/sys/class/drm`. This add-on bundles `amdgpu.ids` so those cards get readable names instead of raw PCI ids, plus `nvtop` as an alternative collector.
+Unlike the Intel variant, AMD monitoring needs no vendor tooling: Beszel's `amd_sysfs` collector reads the numbers straight out of `/sys/class/drm`. This app bundles `amdgpu.ids` so those cards get readable names instead of raw PCI ids, plus `nvtop` as an alternative collector.
 
-The add-on log lists the `amdgpu` cards it can see at startup, which is the quickest way to tell whether the container has GPU access.
+The app log lists the `amdgpu` cards it can see at startup, which is the quickest way to tell whether the container has GPU access.
 
 ## AMD GPU Monitoring
 
@@ -28,7 +28,7 @@ environment_vars:
     value: "amd_sysfs"
 ```
 
-Supported values on this add-on are `amd_sysfs` (recommended) and `nvtop`. Upstream also lists `rocm-smi`, but it is deprecated and is not bundled here.
+Supported values on this app are `amd_sysfs` (recommended) and `nvtop`. Upstream also lists `rocm-smi`, but it is deprecated and is not bundled here.
 
 To turn GPU monitoring off entirely, set `SKIP_GPU` to `true`.
 
@@ -45,14 +45,14 @@ No manual configuration is required, but Protection mode must be off here too.
 
 ## Watchdog and Healthcheck
 
-This add-on uses two internal ports:
+This app uses two internal ports:
 
 - `45876/tcp` for the Beszel agent
 - `45877/tcp` for a lightweight HTTP watchdog endpoint
 
 ## Installation and Setup
 
-Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the add-on.
+Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the app.
 
 ## Need Help?
 

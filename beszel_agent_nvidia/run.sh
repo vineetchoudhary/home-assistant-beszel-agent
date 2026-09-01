@@ -14,7 +14,7 @@ supervisor_api_available() {
     [ -n "${SUPERVISOR_TOKEN:-}" ]
 }
 
-fetch_addon_info() {
+fetch_app_info() {
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL \
             -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
@@ -28,41 +28,41 @@ fetch_addon_info() {
     fi
 }
 
-# Check if add-on watchdog is enabled by querying the Supervisor API
-addon_watchdog_enabled() {
-    local addon_info=""
+# Check if app watchdog is enabled by querying the Supervisor API
+app_watchdog_enabled() {
+    local app_info=""
 
     if ! supervisor_api_available; then
         bashio::log.info "Skipping healthcheck server: SUPERVISOR_TOKEN not available"
         return 1
     fi
 
-    if ! addon_info="$(fetch_addon_info)"; then
+    if ! app_info="$(fetch_app_info)"; then
         bashio::log.warning "Skipping healthcheck server: neither curl nor wget is available"
         return 1
     fi
 
-    if printf '%s' "${addon_info}" | tr -d '\n' | grep -q '"watchdog":[[:space:]]*true'; then
+    if printf '%s' "${app_info}" | tr -d '\n' | grep -q '"watchdog":[[:space:]]*true'; then
         return 0
     fi
 
-    if [ -n "${addon_info}" ]; then
-        bashio::log.info "Skipping healthcheck server: add-on watchdog is disabled"
+    if [ -n "${app_info}" ]; then
+        bashio::log.info "Skipping healthcheck server: app watchdog is disabled"
     else
-        bashio::log.warning "Skipping healthcheck server: unable to query supervisor add-on info"
+        bashio::log.warning "Skipping healthcheck server: unable to query supervisor app info"
     fi
 
     return 1
 }
 
-# Start a simple HTTP server to serve the healthcheck endpoint if the add-on watchdog is enabled
+# Start a simple HTTP server to serve the healthcheck endpoint if the app watchdog is enabled
 start_healthcheck_server() {
     local health_root="/tmp/beszel-health"
     local health_port="45877"
     local httpd_output=""
     local -a httpd_cmd=()
 
-    if ! addon_watchdog_enabled; then
+    if ! app_watchdog_enabled; then
         return 0
     fi
 
@@ -85,7 +85,7 @@ start_healthcheck_server() {
             httpd_output="$("${httpd_cmd[@]}" 2>&1 || true)"
             if printf '%s' "${httpd_output}" | grep -qi 'Address in use'; then
                 bashio::log.error "Healthcheck server failed to bind port ${health_port}: ${httpd_output}"
-                bashio::log.error "Change the watchdog port or disable the watchdog, otherwise Home Assistant may keep restarting this add-on in a loop."
+                bashio::log.error "Change the watchdog port or disable the watchdog, otherwise Home Assistant may keep restarting this app in a loop."
             elif [ -n "${httpd_output}" ]; then
                 bashio::log.warning "Healthcheck server exited: ${httpd_output}"
             fi
@@ -161,8 +161,8 @@ if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
             bashio::log.warning "Skipping environment variable at index ${index}: name or value is empty"
         elif [[ ! "$NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
             # `export` rejects a malformed name, and because this script runs under
-            # `set -e` that would stop the add-on before the agent is ever started.
-            # Warn and skip instead, so one typo cannot take the add-on down.
+            # `set -e` that would stop the app before the agent is ever started.
+            # Warn and skip instead, so one typo cannot take the app down.
             bashio::log.warning "Skipping environment variable at index ${index}: '${NAME}' is not a valid variable name"
         else
             export "${NAME}=${VALUE}"
@@ -175,9 +175,9 @@ fi
 
 # Report on the custom_volumes option.
 #
-# This option cannot mount anything. Home Assistant builds an add-on's mounts
+# This option cannot mount anything. Home Assistant builds an app's mounts
 # from `map:` in config.yaml (a fixed set of folder types) and `devices:`; there
-# is no mechanism for an add-on to mount an arbitrary host path chosen at
+# is no mechanism for an app to mount an arbitrary host path chosen at
 # runtime from its own options. The paths below are only checked for existence,
 # so the option is useful for confirming a path a `map:` entry already provides.
 if supervisor_api_available && bashio::config.has_value 'custom_volumes'; then
@@ -197,9 +197,9 @@ if supervisor_api_available && bashio::config.has_value 'custom_volumes'; then
             bashio::log.info "  [${volume_count}] ${HOST_PATH} -> ${ACTUAL_PATH}"
 
             if [[ -e "$ACTUAL_PATH" ]]; then
-                bashio::log.info "      ✓ Path is present inside the add-on"
+                bashio::log.info "      ✓ Path is present inside the app"
             else
-                bashio::log.warning "      ✗ Path is not present inside the add-on: ${ACTUAL_PATH}"
+                bashio::log.warning "      ✗ Path is not present inside the app: ${ACTUAL_PATH}"
                 missing_count=$((missing_count + 1))
             fi
             volume_count=$((volume_count + 1))
@@ -213,10 +213,10 @@ if supervisor_api_available && bashio::config.has_value 'custom_volumes'; then
     if [ $volume_count -eq 0 ]; then
         bashio::log.info "  No valid custom volumes configured"
     elif [ $missing_count -gt 0 ]; then
-        bashio::log.warning "  ${missing_count} of ${volume_count} path(s) are not visible to this add-on."
+        bashio::log.warning "  ${missing_count} of ${volume_count} path(s) are not visible to this app."
         bashio::log.warning "  'custom_volumes' does not mount anything - Home Assistant does not let"
-        bashio::log.warning "  an add-on mount arbitrary host paths. Only the folders Home Assistant"
-        bashio::log.warning "  already shares with add-ons can be monitored."
+        bashio::log.warning "  an app mount arbitrary host paths. Only the folders Home Assistant"
+        bashio::log.warning "  already shares with apps can be monitored."
     fi
 fi
 
@@ -258,10 +258,10 @@ if command -v nvidia-smi >/dev/null 2>&1; then
 else
     bashio::log.error "✗ nvidia-smi not found - no NVIDIA GPU stats will be reported"
     bashio::log.error "The NVIDIA Container Toolkit injects nvidia-smi into the container."
-    bashio::log.error "Home Assistant cannot request the NVIDIA runtime per add-on, so this"
+    bashio::log.error "Home Assistant cannot request the NVIDIA runtime per app, so this"
     bashio::log.error "only works on Home Assistant Supervised hosts configured with"
     bashio::log.error '"default-runtime": "nvidia" in /etc/docker/daemon.json.'
-    bashio::log.error "It cannot work on Home Assistant OS. See this add-on's documentation."
+    bashio::log.error "It cannot work on Home Assistant OS. See this app's documentation."
 fi
 if command -v nvtop >/dev/null 2>&1; then
     bashio::log.info "✓ nvtop available (alternate collector)"

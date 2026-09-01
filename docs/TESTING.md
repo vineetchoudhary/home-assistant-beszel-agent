@@ -15,12 +15,12 @@ cd home-assistant-beszel-agent
 ```
 
 2. **Add to Home Assistant:**
-- **Supervisor** → **Add-on Store** → **⋮** → **Repositories**
+- **Supervisor** → **App Store** → **⋮** → **Repositories**
 - Add: `file:///path/to/home-assistant-beszel-agent` (full path)
 
 3. **Install it:**
-- Refresh the add-on store page
-- Find the add-on you want under local add-ons ("Beszel Agent", "Beszel Hub", ...)
+- Refresh the app store page
+- Find the app you want under local apps ("Beszel Agent", "Beszel Hub", ...)
 - Hit Install and configure it
 - Watch the logs for any problems
 
@@ -80,7 +80,7 @@ To exercise the `app_url` path without a Supervisor, set the environment variabl
 docker run --rm -it -p 8090:8090 -e APP_URL="https://beszel.example.com" beszel-hub-test
 ```
 
-Note that a URL with a path (`https://example.com/beszel`) makes the Hub serve its assets under that path, so `http://127.0.0.1:8090/` will 404 on its JS bundle - browse to `http://127.0.0.1:8090/beszel/` instead. That is expected Beszel behaviour, not an add-on bug.
+Note that a URL with a path (`https://example.com/beszel`) makes the Hub serve its assets under that path, so `http://127.0.0.1:8090/` will 404 on its JS bundle - browse to `http://127.0.0.1:8090/beszel/` instead. That is expected Beszel behaviour, not an app bug.
 
 Data lands in `/var/lib/beszel-hub/beszel_data` inside the container. Mount a host directory there if you want it to survive `--rm`:
 
@@ -142,12 +142,12 @@ docker manifest inspect <registry>/home-assistant-beszel-agent:test
 For a plain local test, build one platform with `--load` instead.
 
 
-## Test Every Add-on At Once
+## Test Every App At Once
 
-`scripts/test-addons.sh` builds and tests every add-on in the repository. It discovers them from the filesystem, reads each one's architectures from its `config.yaml`, and picks the Alpine or Debian base by looking at the Dockerfile - so a new `beszel_*` directory is covered automatically with nothing to update.
+`scripts/test-apps.sh` builds and tests every app in the repository. It discovers them from the filesystem, reads each one's architectures from its `config.yaml`, and picks the Alpine or Debian base by looking at the Dockerfile - so a new `beszel_*` directory is covered automatically with nothing to update.
 
 ```bash
-./scripts/test-addons.sh
+./scripts/test-apps.sh
 ```
 
 That runs three phases:
@@ -158,32 +158,32 @@ That runs three phases:
 | Build | Builds each image on the right base, natively where possible |
 | Smoke | Runs each one: agents must reach port 45876 and stay up, hubs must answer `/api/health` |
 
-The Dockerfiles carry `# hadolint ignore=DL3018` / `DL3008` directives with a comment explaining why: the Home Assistant base image tracks `:latest`, and both Alpine and Debian drop superseded package versions from their repositories, so a pinned `apk add pkg=1.2.3-r0` stops resolving the moment the base moves and the build breaks. Reproducibility comes from pinning the upstream Beszel release in each add-on's `beszel_version` file instead. Because those known findings are suppressed at the source, hadolint is expected to be clean and any new finding fails the run.
+The Dockerfiles carry `# hadolint ignore=DL3018` / `DL3008` directives with a comment explaining why: the Home Assistant base image tracks `:latest`, and both Alpine and Debian drop superseded package versions from their repositories, so a pinned `apk add pkg=1.2.3-r0` stops resolving the moment the base moves and the build breaks. Reproducibility comes from pinning the upstream Beszel release in each app's `beszel_version` file instead. Because those known findings are suppressed at the source, hadolint is expected to be clean and any new finding fails the run.
 
 Useful variations:
 
 ```bash
-./scripts/test-addons.sh --static           # fast, no Docker needed
-./scripts/test-addons.sh --supervisor       # add the mock Supervisor test (below)
-./scripts/test-addons.sh beszel_hub         # just one add-on
-./scripts/test-addons.sh --keep             # leave the built images behind
+./scripts/test-apps.sh --static           # fast, no Docker needed
+./scripts/test-apps.sh --supervisor       # add the mock Supervisor test (below)
+./scripts/test-apps.sh beszel_hub         # just one app
+./scripts/test-apps.sh --keep             # leave the built images behind
 ```
 
 It exits non-zero if anything fails, and cleans up its containers, images and networks on the way out - including when interrupted.
 
 ### The mock Supervisor test
 
-The smoke tests use the `BESZEL_*` environment overrides, which bypass bashio entirely. `--supervisor` covers the path real users actually take: it stands up a fake Supervisor API, points the add-on at it with only `SUPERVISOR_TOKEN` set, and checks that
+The smoke tests use the `BESZEL_*` environment overrides, which bypass bashio entirely. `--supervisor` covers the path real users actually take: it stands up a fake Supervisor API, points the app at it with only `SUPERVISOR_TOKEN` set, and checks that
 
 - the agent reads `hub_url`, `token` and `key` over the API, and the hub reads `app_url`
-- a deliberately malformed `environment_vars` name is skipped with a warning rather than killing the add-on (`export` rejects it, and `run.sh` runs under `set -e`)
-- the add-on is still running afterwards
+- a deliberately malformed `environment_vars` name is skipped with a warning rather than killing the app (`export` rejects it, and `run.sh` runs under `set -e`)
+- the app is still running afterwards
 
 This is the phase that catches configuration-reading regressions, so run it before changing anything in `run.sh`.
 
 ### End-to-end test
 
-`scripts/test-addons.sh` proves each image starts. `scripts/test-e2e.sh` proves the product actually works - a real Hub add-on and a real Agent add-on, talking to each other:
+`scripts/test-apps.sh` proves each image starts. `scripts/test-e2e.sh` proves the product actually works - a real Hub app and a real Agent app, talking to each other:
 
 ```bash
 ./scripts/test-e2e.sh                        # hub + the standard agent
@@ -192,7 +192,7 @@ This is the phase that catches configuration-reading regressions, so run it befo
 ./scripts/test-e2e.sh --clean                # remove what a previous run left
 ```
 
-What it does, using only the add-on images this repository builds:
+What it does, using only the app images this repository builds:
 
 1. Starts the Hub with `USER_EMAIL` / `USER_PASSWORD`, which Beszel's first-run migration turns into an admin account
 2. Authenticates against the Hub's REST API as that user - note it must be the regular user, because Beszel refuses to issue universal tokens to superusers
@@ -229,7 +229,7 @@ PASS  hub stored real metrics: cpu=15.38% mem=8.5% disk=4.69% agent=0.18.8 threa
     docker rm -f ... && docker network rm ... && rm -rf ...
 ```
 
-Open that URL, log in with those credentials, and you get the real Beszel dashboard with every add-on variant reporting into it.
+Open that URL, log in with those credentials, and you get the real Beszel dashboard with every app variant reporting into it.
 
 The Hub is published on a free host port (starting at 18300) so it will not collide with a Beszel instance you already run. Everything else stays on a throwaway Docker network, and containers, images, the network and the seeded agent data are removed on exit unless you pass `--keep`.
 

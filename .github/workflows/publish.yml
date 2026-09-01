@@ -117,44 +117,44 @@ jobs:
           echo "Latest Beszel version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Resolve add-on and upstream versions
+      - name: Resolve app and upstream versions
         id: resolve_versions
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          CURRENT_ADDON_VERSION="$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')"
+          CURRENT_APP_VERSION="$(grep '^version:' beszel_agent/config.yaml | sed -E 's/version: "(.*)"/\1/')"
           CURRENT_BESZEL_VERSION="$(tr -d '[:space:]' < beszel_agent/beszel_version)"
           LATEST_BESZEL_VERSION="${{ steps.get_version.outputs.VERSION }}"
 
           if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
-            ADDON_VERSION="${TAG_VERSION}"
+            APP_VERSION="${TAG_VERSION}"
             BESZEL_VERSION="${CURRENT_BESZEL_VERSION}"
             echo "Tag-based release detected"
-            echo "Using add-on/image version from git tag: ${ADDON_VERSION}"
+            echo "Using app/image version from git tag: ${APP_VERSION}"
             echo "Using upstream Beszel version from repo state: ${BESZEL_VERSION}"
           elif [[ "${{ steps.trigger_type.outputs.type }}" == "manual" && "${{ steps.trigger_type.outputs.image_type }}" != "all" ]]; then
-            # Rebuilding one add-on must not bump it past the others: all add-ons
+            # Rebuilding one app must not bump it past the others: all apps
             # share a single version, and an upstream bump is the job of a full
             # ("all") or scheduled run.
-            ADDON_VERSION="${CURRENT_ADDON_VERSION}"
+            APP_VERSION="${CURRENT_APP_VERSION}"
             BESZEL_VERSION="${CURRENT_BESZEL_VERSION}"
-            echo "Single add-on rebuild - holding the current repository version"
-            echo "Using add-on/image version: ${ADDON_VERSION}"
+            echo "Single app rebuild - holding the current repository version"
+            echo "Using app/image version: ${APP_VERSION}"
             echo "Using upstream Beszel version: ${BESZEL_VERSION}"
           elif [[ "${LATEST_BESZEL_VERSION}" != "${CURRENT_BESZEL_VERSION}" ]]; then
-            ADDON_VERSION="${LATEST_BESZEL_VERSION}"
+            APP_VERSION="${LATEST_BESZEL_VERSION}"
             BESZEL_VERSION="${LATEST_BESZEL_VERSION}"
             echo "Upstream Beszel update detected"
-            echo "Using add-on/image version: ${ADDON_VERSION}"
+            echo "Using app/image version: ${APP_VERSION}"
             echo "Using upstream Beszel version: ${BESZEL_VERSION}"
           else
-            ADDON_VERSION="${CURRENT_ADDON_VERSION}"
+            APP_VERSION="${CURRENT_APP_VERSION}"
             BESZEL_VERSION="${CURRENT_BESZEL_VERSION}"
             echo "No upstream Beszel change detected"
-            echo "Using add-on/image version: ${ADDON_VERSION}"
+            echo "Using app/image version: ${APP_VERSION}"
             echo "Using upstream Beszel version: ${BESZEL_VERSION}"
           fi
 
-          echo "ADDON_VERSION=${ADDON_VERSION}" >> $GITHUB_OUTPUT
+          echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_OUTPUT
           echo "BESZEL_VERSION=${BESZEL_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Check if config file version is up-to-date
@@ -169,39 +169,39 @@ jobs:
             echo "run_steps=true" >> $GITHUB_OUTPUT
           # For tag-based releases, always build with the tag version
           elif [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
-            echo "Tag-based release: Building add-on version ${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
+            echo "Tag-based release: Building app version ${{ steps.resolve_versions.outputs.APP_VERSION }}"
             echo "run_steps=true" >> $GITHUB_OUTPUT
-          # A manual run that names one add-on is an explicit request to build it,
+          # A manual run that names one app is an explicit request to build it,
           # so don't fall through to the "already up-to-date" skip.
           elif [[ "${{ steps.trigger_type.outputs.type }}" == "manual" && "${{ steps.trigger_type.outputs.image_type }}" != "all" ]]; then
             echo "Manual ${{ steps.trigger_type.outputs.image_type }} build requested"
             echo "run_steps=true" >> $GITHUB_OUTPUT
-          elif [ "$CONFIG_VERSION" = "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" ]; then
+          elif [ "$CONFIG_VERSION" = "${{ steps.resolve_versions.outputs.APP_VERSION }}" ]; then
             echo "Version is up-to-date. Skipping further steps."
             echo "run_steps=false" >> $GITHUB_OUTPUT
           else
             echo "Version is outdated. Proceeding with updates."
             echo "run_steps=true" >> $GITHUB_OUTPUT
           fi
-      - name: Update add-on versions
+      - name: Update app versions
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
-          # Discovered rather than listed, so adding an add-on directory is enough.
-          ADDON_DIRS=$(find . -maxdepth 2 -name config.yaml -path './beszel_*' -exec dirname {} \; | sed 's|^\./||' | sort)
+          # Discovered rather than listed, so adding an app directory is enough.
+          APP_DIRS=$(find . -maxdepth 2 -name config.yaml -path './beszel_*' -exec dirname {} \; | sed 's|^\./||' | sort)
 
           printf '# Changelog\n\n[View GitHub release v%s](https://github.com/%s/releases/tag/v%s)\n' \
-            "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" \
+            "${{ steps.resolve_versions.outputs.APP_VERSION }}" \
             "${{ github.repository }}" \
-            "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" \
+            "${{ steps.resolve_versions.outputs.APP_VERSION }}" \
             > /tmp/CHANGELOG.md
 
-          for dir in ${ADDON_DIRS}; do
-            sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" "${dir}/config.yaml"
+          for dir in ${APP_DIRS}; do
+            sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.APP_VERSION }}\"/" "${dir}/config.yaml"
             printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > "${dir}/beszel_version"
             cp /tmp/CHANGELOG.md "${dir}/CHANGELOG.md"
           done
 
-          echo "Updated add-on version to ${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
+          echo "Updated app version to ${{ steps.resolve_versions.outputs.APP_VERSION }}"
           echo "Updated upstream Beszel version to ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
 
       - name: Login to GitHub Container Registry
@@ -224,13 +224,13 @@ jobs:
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
           # ------------------------------------------------------------------
-          # Add-on table. One row per add-on:
+          # App table. One row per app:
           #   id | directory | image suffix | platforms | base | smoke test
           # `id` doubles as the workflow_dispatch image_type value.
           # `base` selects the Home Assistant base image; both are multi-arch,
           # which is what lets a single build produce a multi-arch manifest.
           # ------------------------------------------------------------------
-          cat > /tmp/addons.tsv <<'EOF'
+          cat > /tmp/apps.tsv <<'EOF'
           stable	beszel_agent	home-assistant-beszel-agent	linux/amd64,linux/arm64	alpine	agent
           smart	beszel_agent_smart	home-assistant-beszel-agent-smart	linux/amd64,linux/arm64	alpine	agent
           intel	beszel_agent_intel	home-assistant-beszel-agent-intel	linux/amd64	alpine	agent
@@ -238,11 +238,11 @@ jobs:
           nvidia	beszel_agent_nvidia	home-assistant-beszel-agent-nvidia	linux/amd64,linux/arm64	debian	agent
           hub	beszel_hub	home-assistant-beszel-hub	linux/amd64,linux/arm64	alpine	hub
           EOF
-          echo "Add-on table:"
-          cat /tmp/addons.tsv
+          echo "App table:"
+          cat /tmp/apps.tsv
 
           # Emit the rows selected by the requested image type ("all" selects everything).
-          cat > /tmp/select-addons.sh <<'EOF'
+          cat > /tmp/select-apps.sh <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
           want="${1:-all}"
@@ -251,12 +251,12 @@ jobs:
             if [ "${want}" = "all" ] || [ "${want}" = "${id}" ]; then
               printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${id}" "${dir}" "${suffix}" "${platforms}" "${base}" "${test_kind}"
             fi
-          done < /tmp/addons.tsv
+          done < /tmp/apps.tsv
           EOF
 
-          # Build one add-on image. Multi-platform builds must be pushed, because a
+          # Build one app image. Multi-platform builds must be pushed, because a
           # manifest list cannot be loaded into the local Docker image store.
-          cat > /tmp/build-addon-image.sh <<'EOF'
+          cat > /tmp/build-app-image.sh <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
 
@@ -315,18 +315,18 @@ jobs:
             "${context_dir}"
           EOF
 
-          chmod +x /tmp/build-addon-image.sh /tmp/select-addons.sh
+          chmod +x /tmp/build-app-image.sh /tmp/select-apps.sh
 
       - name: Build and smoke test images
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
+          VERSION="${{ steps.resolve_versions.outputs.APP_VERSION }}"
           IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
           [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
 
-          SELECTED=$(/tmp/select-addons.sh "${IMAGE_TYPE}")
+          SELECTED=$(/tmp/select-apps.sh "${IMAGE_TYPE}")
           if [ -z "${SELECTED}" ]; then
-            echo "No add-ons matched image type '${IMAGE_TYPE}'"
+            echo "No apps matched image type '${IMAGE_TYPE}'"
             exit 1
           fi
 
@@ -341,7 +341,7 @@ jobs:
             # First platform in the row. A manifest list cannot be --load'ed, so the
             # smoke test always builds exactly one platform.
             smoke_platform="${platforms%%,*}"
-            /tmp/build-addon-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${smoke_platform}" "${base}" "false" "load"
+            /tmp/build-app-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${smoke_platform}" "${base}" "false" "load"
 
             case "${test_kind}" in
               agent)
@@ -417,21 +417,21 @@ jobs:
       - name: Publish images
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
+          VERSION="${{ steps.resolve_versions.outputs.APP_VERSION }}"
           IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
           [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
 
-          # One build per add-on emits a multi-arch manifest, so config.yaml can
+          # One build per app emits a multi-arch manifest, so config.yaml can
           # reference a single image name with no {arch} placeholder.
           while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
             [ -n "${id}" ] || continue
             IMAGE="ghcr.io/vineetchoudhary/${suffix}"
             echo "::group::Publish ${id} (${platforms})"
-            /tmp/build-addon-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${platforms}" "${base}" "true" "push"
+            /tmp/build-app-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${platforms}" "${base}" "true" "push"
             echo "::endgroup::"
-          done <<< "$(/tmp/select-addons.sh "${IMAGE_TYPE}")"
+          done <<< "$(/tmp/select-apps.sh "${IMAGE_TYPE}")"
 
-      - name: Commit add-on version update
+      - name: Commit app version update
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
           git config --global user.name "Developer Insider Bot"
@@ -440,17 +440,17 @@ jobs:
           IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
           [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
 
-          # Only stage the add-ons this run actually published, so a single-add-on
+          # Only stage the apps this run actually published, so a single-app
           # build never commits version bumps for images it did not build.
           SELECTED_DIRS=""
           while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
             [ -n "${id}" ] || continue
             git add "${dir}/config.yaml" "${dir}/beszel_version" "${dir}/CHANGELOG.md"
             SELECTED_DIRS="${SELECTED_DIRS} ${dir}"
-          done <<< "$(/tmp/select-addons.sh "${IMAGE_TYPE}")"
+          done <<< "$(/tmp/select-apps.sh "${IMAGE_TYPE}")"
           echo "Staged:${SELECTED_DIRS}"
 
-          # Discard the version bumps written for add-ons this run did not build.
+          # Discard the version bumps written for apps this run did not build.
           # Scoped to those directories rather than the whole tree on purpose.
           while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
             [ -n "${dir}" ] || continue
@@ -459,16 +459,16 @@ jobs:
             esac
             git checkout -- "${dir}" 2>/dev/null || true
             echo "Reverted unbuilt ${dir}"
-          done < /tmp/addons.tsv
+          done < /tmp/apps.tsv
 
           if [ "${IMAGE_TYPE}" = "all" ]; then
             if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
-              COMMIT_MSG="Release ${{ github.ref_name }}: Add-on ${ADDON_VERSION}, Beszel ${BESZEL_VERSION}"
+              COMMIT_MSG="Release ${{ github.ref_name }}: App ${APP_VERSION}, Beszel ${BESZEL_VERSION}"
             else
-              COMMIT_MSG="Update add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
+              COMMIT_MSG="Update app ${APP_VERSION} to Beszel ${BESZEL_VERSION}"
             fi
           else
-            COMMIT_MSG="Update ${IMAGE_TYPE} add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
+            COMMIT_MSG="Update ${IMAGE_TYPE} app ${APP_VERSION} to Beszel ${BESZEL_VERSION}"
           fi
 
           git commit -m "$COMMIT_MSG" || echo "No changes to commit"
@@ -480,13 +480,13 @@ jobs:
             echo "Skipping push for tag-based release"
           fi
         env:
-          ADDON_VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
+          APP_VERSION: ${{ steps.resolve_versions.outputs.APP_VERSION }}
           BESZEL_VERSION: ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
 
       - name: Create Git Tag
         if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag' && steps.trigger_type.outputs.image_type == 'all' && inputs.force_rebuild != true
         run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
+          VERSION="${{ steps.resolve_versions.outputs.APP_VERSION }}"
           TAG="v${VERSION}"
           
           git tag -a "${TAG}" -m "Release ${TAG}: Update to Beszel ${VERSION}"
@@ -498,11 +498,11 @@ jobs:
         if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag' && steps.trigger_type.outputs.image_type == 'all' && inputs.force_rebuild != true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ADDON_VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
+          APP_VERSION: ${{ steps.resolve_versions.outputs.APP_VERSION }}
           BESZEL_VERSION: ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
         run: |
-          gh release create "v${ADDON_VERSION}" \
-            --title "Release v${ADDON_VERSION}" \
+          gh release create "v${APP_VERSION}" \
+            --title "Release v${APP_VERSION}" \
             --notes "## Changes
-          - Updated Beszel add-ons to version ${ADDON_VERSION}
+          - Updated Beszel apps to version ${APP_VERSION}
           - Upstream release notes: https://github.com/henrygd/beszel/releases/tag/v${BESZEL_VERSION}"

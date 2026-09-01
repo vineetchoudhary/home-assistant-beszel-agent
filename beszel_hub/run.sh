@@ -21,7 +21,7 @@ if [ ! -f /usr/local/bin/beszel ]; then
 fi
 
 # Beszel Hub reads APP_URL (and its BESZEL_HUB_APP_URL alias) from the environment
-# itself, so anything already exported is passed through untouched. The add-on option
+# itself, so anything already exported is passed through untouched. The app option
 # is only consulted when the Supervisor API is reachable.
 APP_URL="${BESZEL_HUB_APP_URL:-${APP_URL:-}}"
 
@@ -49,8 +49,8 @@ if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
             bashio::log.warning "Skipping environment variable at index ${index}: name or value is empty"
         elif [[ ! "$NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
             # `export` rejects a malformed name, and because this script runs under
-            # `set -e` that would stop the add-on before the agent is ever started.
-            # Warn and skip instead, so one typo cannot take the add-on down.
+            # `set -e` that would stop the app before the agent is ever started.
+            # Warn and skip instead, so one typo cannot take the app down.
             bashio::log.warning "Skipping environment variable at index ${index}: '${NAME}' is not a valid variable name"
         else
             export "${NAME}=${VALUE}"
@@ -61,7 +61,7 @@ if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
     done
 fi
 
-# Mapped to the add-on data directory by config.yaml, so it survives restarts and
+# Mapped to the app data directory by config.yaml, so it survives restarts and
 # updates. Passed explicitly rather than relying on the working directory, because
 # Beszel resolves its default "beszel_data" relative to the current directory.
 DATA_DIR="/var/lib/beszel-hub/beszel_data"
@@ -69,6 +69,6 @@ mkdir -p "${DATA_DIR}"
 
 bashio::log.info "Hub data directory: ${DATA_DIR}"
 bashio::log.info "Beszel Hub web UI available at http://[HOST]:8090"
-bashio::log.info "Create the first admin user from the web UI after the add-on starts"
+bashio::log.info "Create the first admin user from the web UI after the app starts"
 
 exec /usr/local/bin/beszel serve --http "0.0.0.0:8090" --dir "${DATA_DIR}"
