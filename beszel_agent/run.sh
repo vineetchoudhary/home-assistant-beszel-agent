@@ -157,53 +157,66 @@ if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
         NAME=$(bashio::config "environment_vars[${index}].name")
         VALUE=$(bashio::config "environment_vars[${index}].value")
         
-        if [[ -n "$NAME" && -n "$VALUE" ]]; then
+        if [[ -z "$NAME" || -z "$VALUE" ]]; then
+            bashio::log.warning "Skipping environment variable at index ${index}: name or value is empty"
+        elif [[ ! "$NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            # `export` rejects a malformed name, and because this script runs under
+            # `set -e` that would stop the add-on before the agent is ever started.
+            # Warn and skip instead, so one typo cannot take the add-on down.
+            bashio::log.warning "Skipping environment variable at index ${index}: '${NAME}' is not a valid variable name"
+        else
             export "${NAME}=${VALUE}"
             bashio::log.info "Set environment variable: ${NAME}"
-        else
-            bashio::log.warning "Skipping invalid environment variable at index ${index}"
         fi
         
         index=$((index + 1))
     done
 fi
 
-# Process custom volumes (for logging/verification purposes)
-# Note: Actual mounting is handled by Home Assistant supervisor based on config.yaml
+# Report on the custom_volumes option.
+#
+# This option cannot mount anything. Home Assistant builds an add-on's mounts
+# from `map:` in config.yaml (a fixed set of folder types) and `devices:`; there
+# is no mechanism for an add-on to mount an arbitrary host path chosen at
+# runtime from its own options. The paths below are only checked for existence,
+# so the option is useful for confirming a path a `map:` entry already provides.
 if supervisor_api_available && bashio::config.has_value 'custom_volumes'; then
     bashio::log.info "Custom volumes configured:"
     index=0
     volume_count=0
+    missing_count=0
     while bashio::config.exists "custom_volumes[${index}]"; do
         HOST_PATH=$(bashio::config "custom_volumes[${index}].host_path" || echo "")
         CONTAINER_PATH=$(bashio::config "custom_volumes[${index}].container_path" || echo "")
-        
+
         if [[ -n "$HOST_PATH" && -n "$CONTAINER_PATH" ]]; then
             # Parse :ro suffix if present
             ACTUAL_PATH="${CONTAINER_PATH%:ro}"
             ACTUAL_PATH="${ACTUAL_PATH%:rw}"
-            RO_FLAG=""
-            [[ "$CONTAINER_PATH" == *":ro" ]] && RO_FLAG=" (read-only)"
-            [[ "$CONTAINER_PATH" == *":rw" ]] && RO_FLAG=" (read-write)"
-            
-            bashio::log.info "  [${volume_count}] ${HOST_PATH} -> ${ACTUAL_PATH}${RO_FLAG}"
-            
-            # Verify the mount exists in the container
+
+            bashio::log.info "  [${volume_count}] ${HOST_PATH} -> ${ACTUAL_PATH}"
+
             if [[ -e "$ACTUAL_PATH" ]]; then
-                bashio::log.info "      ✓ Mount point verified"
+                bashio::log.info "      ✓ Path is present inside the add-on"
             else
-                bashio::log.warning "      ✗ Mount point not accessible: ${ACTUAL_PATH}"
+                bashio::log.warning "      ✗ Path is not present inside the add-on: ${ACTUAL_PATH}"
+                missing_count=$((missing_count + 1))
             fi
             volume_count=$((volume_count + 1))
         else
             bashio::log.warning "Skipping invalid volume configuration at index ${index} (missing host_path or container_path)"
         fi
-        
+
         index=$((index + 1))
     done
-    
+
     if [ $volume_count -eq 0 ]; then
         bashio::log.info "  No valid custom volumes configured"
+    elif [ $missing_count -gt 0 ]; then
+        bashio::log.warning "  ${missing_count} of ${volume_count} path(s) are not visible to this add-on."
+        bashio::log.warning "  'custom_volumes' does not mount anything - Home Assistant does not let"
+        bashio::log.warning "  an add-on mount arbitrary host paths. Only the folders Home Assistant"
+        bashio::log.warning "  already shares with add-ons can be monitored."
     fi
 fi
 

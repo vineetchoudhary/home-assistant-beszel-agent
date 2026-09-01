@@ -16,7 +16,7 @@ ports:
   8090/tcp: 8090
 ports_description:
   8090/tcp: "Beszel Hub web UI and API. Also used by the Home Assistant watchdog; if you clear this port the watchdog cannot reach the add-on."
-image: "ghcr.io/vineetchoudhary/home-assistant-beszel-hub-{arch}"
+image: "ghcr.io/vineetchoudhary/home-assistant-beszel-hub"
 options:
   app_url: ""
   environment_vars: []

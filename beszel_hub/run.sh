@@ -45,11 +45,16 @@ if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
         NAME=$(bashio::config "environment_vars[${index}].name")
         VALUE=$(bashio::config "environment_vars[${index}].value")
 
-        if [[ -n "$NAME" && -n "$VALUE" ]]; then
+        if [[ -z "$NAME" || -z "$VALUE" ]]; then
+            bashio::log.warning "Skipping environment variable at index ${index}: name or value is empty"
+        elif [[ ! "$NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            # `export` rejects a malformed name, and because this script runs under
+            # `set -e` that would stop the add-on before the agent is ever started.
+            # Warn and skip instead, so one typo cannot take the add-on down.
+            bashio::log.warning "Skipping environment variable at index ${index}: '${NAME}' is not a valid variable name"
+        else
             export "${NAME}=${VALUE}"
             bashio::log.info "Set environment variable: ${NAME}"
-        else
-            bashio::log.warning "Skipping invalid environment variable at index ${index}"
         fi
 
         index=$((index + 1))

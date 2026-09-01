@@ -99,7 +99,7 @@ start_healthcheck_server() {
 }
 
 bashio::log.info "========================================"
-bashio::log.info "Starting Beszel Agent..."
+bashio::log.info "Starting Beszel Agent (AMD GPU)..."
 bashio::log.info "========================================"
 
 # Get required configuration
@@ -220,12 +220,58 @@ if supervisor_api_available && bashio::config.has_value 'custom_volumes'; then
     fi
 fi
 
+# Check for S.M.A.R.T. monitoring support
+bashio::log.info "========================================"
+bashio::log.info "S.M.A.R.T. Monitoring Status"
+bashio::log.info "========================================"
+if command -v smartctl >/dev/null 2>&1; then
+    bashio::log.info "✓ smartctl available for S.M.A.R.T. monitoring"
+    
+    # Auto-detect available drives
+    DRIVES=$(smartctl --scan 2>/dev/null | awk '{print $1}' || true)
+    if [ -n "$DRIVES" ]; then
+        bashio::log.info "Available drives detected:"
+        echo "$DRIVES" | while read -r drive; do
+            bashio::log.info "  - $drive"
+        done
+    else
+        bashio::log.warning "No drives detected"
+    fi
+else
+    bashio::log.error "✗ smartctl not found"
+fi
+
+# Report GPU monitoring readiness. Beszel picks a collector automatically; set
+# GPU_COLLECTOR via environment_vars to pin one, or SKIP_GPU=true to turn it off.
+bashio::log.info "========================================"
+bashio::log.info "GPU Monitoring Status"
+bashio::log.info "========================================"
+if command -v nvtop >/dev/null 2>&1; then
+    bashio::log.info "✓ nvtop available (alternate collector)"
+fi
+# The amd_sysfs collector reads /sys directly; no vendor tooling is required.
+AMD_CARDS=""
+for card in /sys/class/drm/card*/device/uevent; do
+    [ -e "$card" ] || continue
+    if grep -qi 'DRIVER=amdgpu' "$card" 2>/dev/null; then
+        AMD_CARDS="${AMD_CARDS} $(basename "$(dirname "$(dirname "$card")")")"
+    fi
+done
+if [ -n "${AMD_CARDS}" ]; then
+    bashio::log.info "✓ amdgpu cards detected:${AMD_CARDS}"
+else
+    bashio::log.warning "No amdgpu cards found under /sys/class/drm"
+    bashio::log.warning "AMD GPU stats will be unavailable on this system"
+fi
+if [ -f /usr/share/libdrm/amdgpu.ids ]; then
+    bashio::log.info "✓ amdgpu.ids present for GPU name lookup"
+fi
+
 # Verify agent binary exists
 if [ ! -f /usr/local/bin/agent ]; then
     die "Beszel Agent binary not found at /usr/local/bin/agent"
 fi
 
-# Start healthcheck server
 start_healthcheck_server
 
 # Start the Beszel Agent

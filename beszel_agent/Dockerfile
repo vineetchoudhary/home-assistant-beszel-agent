@@ -11,6 +11,7 @@ COPY run.sh /
 COPY healthcheck-http.sh /
 
 # Install Beszel Agent
+# hadolint ignore=DL3018
 RUN set -euo pipefail && \
     # Install a tiny HTTP server for Home Assistant watchdog probes
     apk add --no-cache busybox-extras && \

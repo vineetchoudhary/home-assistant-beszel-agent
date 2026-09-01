@@ -1,7 +1,7 @@
-name: "Beszel Agent (S.M.A.R.T.)"
-description: "Beszel Agent Add-on with S.M.A.R.T. Monitoring Support"
+name: "Beszel Agent (NVIDIA GPU)"
+description: "Beszel Agent Add-on with NVIDIA GPU and S.M.A.R.T. Monitoring Support"
 version: "0.18.8"
-slug: "beszel-agent-smart"
+slug: "beszel-agent-nvidia"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
 init: false
 startup: application
@@ -9,11 +9,15 @@ boot: auto
 watchdog: "http://[HOST]:[PORT:45877]/cgi-bin/health"
 host_network: true
 full_access: true
+video: true
 docker_api: true
 host_dbus: true
 privileged:
   - SYS_RAWIO
   - SYS_ADMIN
+environment:
+  NVIDIA_VISIBLE_DEVICES: "all"
+  NVIDIA_DRIVER_CAPABILITIES: "utility"
 arch:
   - aarch64
   - amd64
@@ -23,7 +27,7 @@ ports:
 ports_description:
   45876/tcp: "Beszel agent SSH listener"
   45877/tcp: "Home Assistant watchdog healthcheck endpoint. Not configurable; if this port is already in use, disable watchdog."
-image: "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart"
+image: "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-nvidia"
 options:
   key: ""
   hub_url: ""

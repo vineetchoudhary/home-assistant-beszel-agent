@@ -29,11 +29,16 @@ Run **Build and Publish** from the Actions tab to rebuild one add-on without wai
 | `image_type` | Builds |
 | --- | --- |
 | `all` | every add-on (skipped if the version is already up-to-date, unless `force_rebuild`) |
-| `hub` | `beszel_hub` |
-| `hub-dev` | `beszel_hub_dev` |
 | `stable` | `beszel_agent` |
 | `dev` | `beszel_agent_dev` |
 | `smart` | `beszel_agent_smart` |
+| `intel` | `beszel_agent_intel` |
+| `amd` | `beszel_agent_amd` |
+| `nvidia` | `beszel_agent_nvidia` |
+| `hub` | `beszel_hub` |
+| `hub-dev` | `beszel_hub_dev` |
+
+The list lives in one place - the add-on table in the `Prepare build helpers` step of `publish.yml`. Adding an add-on means adding a row there (`id`, directory, image suffix, platforms, base, smoke-test kind) and a matching `image_type` choice in the `workflow_dispatch` inputs.
 
 Naming a single add-on is treated as an explicit request, so it builds even when the version is unchanged. Single-add-on builds do **not** create a git tag or GitHub release - only `all` does.
 
@@ -50,3 +55,34 @@ Tag-based releases use the git tag as the add-on version and keep the current up
 Automatic upstream releases update both values to the new upstream version.
 
 All add-ons share one version number, driven by `beszel_agent/config.yaml`. Keep them in step - a `config.yaml` version with no matching image tag in GHCR means Home Assistant cannot install that add-on.
+
+## Images and Architectures
+
+Each add-on publishes **one multi-arch image**, built by a single
+`docker buildx build --platform linux/amd64,linux/arm64` per add-on. There is no
+`-{arch}` suffix; `config.yaml` names the image directly and Home Assistant
+resolves the right architecture at pull time.
+
+Smoke tests build a single `linux/amd64` image with `--load`, so it stays in the
+runner's local Docker store and an image that fails its test never reaches the
+registry.
+
+`beszel_agent_intel` is amd64-only (`intel_gpu_top` is not packaged for
+aarch64) and `beszel_agent_nvidia` builds on the Debian base. Both facts live in
+the add-on table, not in per-add-on workflow steps.
+
+### Migrating an image name
+
+Renaming an add-on's image - as the move off `-{arch}` did - is safe, but it only
+reaches installed add-ons on a **version bump**:
+
+- `AppManager.update()` refuses to run when the installed version already equals
+  the store version, so a rename alone is invisible to existing installs.
+- On a real update, `App.update()` records the old image, pulls the new one, and
+  then cleans up the old image itself. Add-on data and options are keyed by slug,
+  so nothing is lost.
+
+Practical consequence: publish the new image name for **every** supported
+architecture before the version bump lands, and keep the old `-{arch}` packages
+around afterwards - an add-on that has not updated yet still resolves the old
+name from its stored data if it is repaired or rebuilt.

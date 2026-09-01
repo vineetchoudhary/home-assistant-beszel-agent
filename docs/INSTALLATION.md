@@ -26,7 +26,7 @@ https://github.com/vineetchoudhary/home-assistant-beszel-agent
 You should see the Beszel add-on repository listed:
 ![Step 5](screenshots/5-ha-add-ons-repo-added.webp)
 
-This repository provides five add-ons:
+This repository provides eight add-ons:
 
 ### 5.1 Beszel Hub
 Run the Beszel Hub directly inside Home Assistant for smaller or self-contained setups.
@@ -44,7 +44,16 @@ For monitoring with S.M.A.R.T. disk health checks.
 
 ![Step 5.2](screenshots/5-beszel-agent-smart-home-assistant.webp)
 
-### 5.5 Beszel Agent (Test)
+### 5.5 Beszel Agent (Intel GPU)
+Intel GPU metrics plus S.M.A.R.T. disk health. amd64 only - the `intel_gpu_top` tool it needs is not packaged for aarch64.
+
+### 5.6 Beszel Agent (AMD GPU)
+AMD GPU metrics plus S.M.A.R.T. disk health. Reads GPU stats from sysfs, so no vendor tooling is required.
+
+### 5.7 Beszel Agent (NVIDIA GPU)
+NVIDIA GPU metrics plus S.M.A.R.T. disk health. **Read [its documentation](../beszel_agent_nvidia/DOCS.md) before installing** - Home Assistant add-ons cannot attach an NVIDIA GPU, so the GPU half only works on a Supervised host that has been configured with the NVIDIA runtime as Docker's default. Everything else in the add-on works regardless.
+
+### 5.8 Beszel Agent (Test)
 Development/testing version
 
 ## 6. Install a Beszel Add-on
@@ -114,7 +123,7 @@ environment_vars:
 
 Check available beszel agent environment variables [here](https://www.beszel.dev/guide/environment-variables#agent).
 
-**custom_volumes** - Mount additional paths
+**custom_volumes** - Check that a path is visible to the add-on
 
 ```yaml
 custom_volumes:
@@ -122,7 +131,12 @@ custom_volumes:
     container_path: "/mnt/data:ro"
 ```
 
-Add `:ro` for read-only, `:rw` (or nothing) for read-write.
+> **This option does not mount anything.** Home Assistant builds an add-on's
+> mounts from the add-on's own `config.yaml`, and it does not allow an add-on to
+> mount an arbitrary host path chosen from its options. The entries here are only
+> checked for existence inside the add-on and reported in the log, which is useful
+> for confirming a path Home Assistant already shares. If the log says a path is
+> not present, no setting in this add-on can make it appear.
 
 ![Step 9](screenshots/9-ha-beszel-agenet-custom-volumes.webp)
 
@@ -148,7 +162,7 @@ The Beszel Hub add-ons use:
 - `8090` for the Beszel web UI and API
 
 ## 12. (Optional) Disable Protection Mode
-If you are not seeing expected metrics, try disabling protection mode. This is mostly required for other Add-ons stats (docker stats) and S.M.A.R.T. monitoring.
+If you are not seeing expected metrics, try disabling protection mode. It is required for other Add-ons stats (docker stats), S.M.A.R.T. monitoring on every variant, and Intel Arc/Xe GPUs. Plain GPU device access does not need it - Home Assistant applies the `/dev/dri` device rules either way - but `full_access` and host PID access are only granted to an unprotected add-on.
 ![Step 12](screenshots/12-ha-beszel-agenet-protection-mode.webp)
 
 Protection Mode restricts add-on access to the host system. It's a security feature, but it limits what metrics Beszel can collect. Only disable it if you trust the add-on and beszel agent - it's open source, but disabling protection does give it broader system access.

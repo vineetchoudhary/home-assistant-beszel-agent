@@ -14,25 +14,22 @@ on:
         type: choice
         options:
           - all
-          - hub
-          - hub-dev
           - stable
           - dev
           - smart
+          - intel
+          - amd
+          - nvidia
+          - hub
+          - hub-dev
       force_rebuild:
         description: 'Force rebuild even if version is up-to-date'
         required: false
         default: false
         type: boolean
-  # Trigger on new tags/releases in this repo
   push:
     tags:
       - 'v*'
-    paths:
-      - '.github/workflows/publish.yml'
-      - 'beszel_agent_dev/**'
-      - 'beszel_hub/**'
-      - 'beszel_hub_dev/**'
 
 jobs:
   build:
@@ -52,22 +49,31 @@ jobs:
           # Determine which image to build based on changed files
           IMAGE_TYPE="all"
           
+          # Branch pushes do not currently trigger this workflow (see the `on:` block),
+          # so this only runs if a `branches:` filter is added there.
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" != refs/tags/* ]]; then
             # Check which files changed
             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
             echo "Changed files:"
             echo "$CHANGED_FILES"
             
-            if echo "$CHANGED_FILES" | grep -q "^beszel_agent_dev/"; then
-              IMAGE_TYPE="dev"
-              echo "Detected changes in beszel_agent_dev - building dev only"
-            elif echo "$CHANGED_FILES" | grep -q "^beszel_hub_dev/"; then
-              IMAGE_TYPE="hub-dev"
-              echo "Detected changes in beszel_hub_dev - building hub dev only"
-            elif echo "$CHANGED_FILES" | grep -q "^beszel_hub/"; then
-              IMAGE_TYPE="hub"
-              echo "Detected changes in beszel_hub - building hub only"
-            fi
+            # Longest directory names first so beszel_hub_dev wins over beszel_hub.
+            for pair in \
+              "beszel_agent_nvidia:nvidia" \
+              "beszel_agent_intel:intel" \
+              "beszel_agent_smart:smart" \
+              "beszel_agent_dev:dev" \
+              "beszel_agent_amd:amd" \
+              "beszel_hub_dev:hub-dev" \
+              "beszel_hub:hub"; do
+              dir="${pair%%:*}"
+              id="${pair##*:}"
+              if echo "$CHANGED_FILES" | grep -q "^${dir}/"; then
+                IMAGE_TYPE="${id}"
+                echo "Detected changes in ${dir} - building ${id} only"
+                break
+              fi
+            done
           fi
           
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
@@ -130,6 +136,15 @@ jobs:
             echo "Tag-based release detected"
             echo "Using add-on/image version from git tag: ${ADDON_VERSION}"
             echo "Using upstream Beszel version from repo state: ${BESZEL_VERSION}"
+          elif [[ "${{ steps.trigger_type.outputs.type }}" == "manual" && "${{ steps.trigger_type.outputs.image_type }}" != "all" ]]; then
+            # Rebuilding one add-on must not bump it past the others: all add-ons
+            # share a single version, and an upstream bump is the job of a full
+            # ("all") or scheduled run.
+            ADDON_VERSION="${CURRENT_ADDON_VERSION}"
+            BESZEL_VERSION="${CURRENT_BESZEL_VERSION}"
+            echo "Single add-on rebuild - holding the current repository version"
+            echo "Using add-on/image version: ${ADDON_VERSION}"
+            echo "Using upstream Beszel version: ${BESZEL_VERSION}"
           elif [[ "${LATEST_BESZEL_VERSION}" != "${CURRENT_BESZEL_VERSION}" ]]; then
             ADDON_VERSION="${LATEST_BESZEL_VERSION}"
             BESZEL_VERSION="${LATEST_BESZEL_VERSION}"
@@ -173,52 +188,26 @@ jobs:
             echo "Version is outdated. Proceeding with updates."
             echo "run_steps=true" >> $GITHUB_OUTPUT
           fi
-      - name: Get latest stable release version from this repository
-        id: get_stable_version
-        if: always()
-        run: |
-          # Fetch the latest stable release from this repository
-          RESPONSE=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
-          
-          LATEST_RELEASE=$(echo "$RESPONSE" | jq -r .tag_name)
-          
-          if [ -n "${LATEST_RELEASE}" ] && [ "${LATEST_RELEASE}" != "null" ]; then
-            LATEST_VERSION=$(echo "${LATEST_RELEASE}" | sed 's/^v//')
-            echo "Latest stable release: ${LATEST_VERSION}"
-            echo "VERSION=${LATEST_VERSION}" >> $GITHUB_OUTPUT
-          else
-            echo "No stable release found"
-            echo "VERSION=" >> $GITHUB_OUTPUT
-          fi
       - name: Update add-on versions
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
-          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_agent/config.yaml
-          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_agent_dev/config.yaml
-          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_agent_smart/config.yaml
-          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_hub/config.yaml
-          sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" beszel_hub_dev/config.yaml
-          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent/beszel_version
-          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent_dev/beszel_version
-          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_agent_smart/beszel_version
-          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_hub/beszel_version
-          printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > beszel_hub_dev/beszel_version
+          # Discovered rather than listed, so adding an add-on directory is enough.
+          ADDON_DIRS=$(find . -maxdepth 2 -name config.yaml -path './beszel_*' -exec dirname {} \; | sed 's|^\./||' | sort)
+
           printf '# Changelog\n\n[View GitHub release v%s](https://github.com/%s/releases/tag/v%s)\n' \
             "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" \
             "${{ github.repository }}" \
             "${{ steps.resolve_versions.outputs.ADDON_VERSION }}" \
-            > beszel_agent/CHANGELOG.md
-          cp beszel_agent/CHANGELOG.md beszel_agent_dev/CHANGELOG.md
-          cp beszel_agent/CHANGELOG.md beszel_agent_smart/CHANGELOG.md
-          cp beszel_agent/CHANGELOG.md beszel_hub/CHANGELOG.md
-          cp beszel_agent/CHANGELOG.md beszel_hub_dev/CHANGELOG.md
+            > /tmp/CHANGELOG.md
+
+          for dir in ${ADDON_DIRS}; do
+            sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.ADDON_VERSION }}\"/" "${dir}/config.yaml"
+            printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > "${dir}/beszel_version"
+            cp /tmp/CHANGELOG.md "${dir}/CHANGELOG.md"
+          done
+
           echo "Updated add-on version to ${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
           echo "Updated upstream Beszel version to ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
-        env:
-          VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
 
       - name: Login to GitHub Container Registry
         if: steps.check_version.outputs.run_steps == 'true'
@@ -236,19 +225,64 @@ jobs:
         if: steps.check_version.outputs.run_steps == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Prepare container build helper
+      - name: Prepare build helpers
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
+          # ------------------------------------------------------------------
+          # Add-on table. One row per add-on:
+          #   id | directory | image suffix | platforms | base | smoke test
+          # `id` doubles as the workflow_dispatch image_type value.
+          # `base` selects the Home Assistant base image; both are multi-arch,
+          # which is what lets a single build produce a multi-arch manifest.
+          # ------------------------------------------------------------------
+          cat > /tmp/addons.tsv <<'EOF'
+          stable	beszel_agent	home-assistant-beszel-agent	linux/amd64,linux/arm64	alpine	agent
+          dev	beszel_agent_dev	home-assistant-beszel-agent-dev	linux/amd64,linux/arm64	alpine	agent
+          smart	beszel_agent_smart	home-assistant-beszel-agent-smart	linux/amd64,linux/arm64	alpine	agent
+          intel	beszel_agent_intel	home-assistant-beszel-agent-intel	linux/amd64	alpine	agent
+          amd	beszel_agent_amd	home-assistant-beszel-agent-amd	linux/amd64,linux/arm64	alpine	agent
+          nvidia	beszel_agent_nvidia	home-assistant-beszel-agent-nvidia	linux/amd64,linux/arm64	debian	agent
+          hub	beszel_hub	home-assistant-beszel-hub	linux/amd64,linux/arm64	alpine	hub
+          hub-dev	beszel_hub_dev	home-assistant-beszel-hub-dev	linux/amd64,linux/arm64	alpine	hub
+          EOF
+          echo "Add-on table:"
+          cat /tmp/addons.tsv
+
+          # Emit the rows selected by the requested image type ("all" selects everything).
+          cat > /tmp/select-addons.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          want="${1:-all}"
+          while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
+            [ -n "${id}" ] || continue
+            if [ "${want}" = "all" ] || [ "${want}" = "${id}" ]; then
+              printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${id}" "${dir}" "${suffix}" "${platforms}" "${base}" "${test_kind}"
+            fi
+          done < /tmp/addons.tsv
+          EOF
+
+          # Build one add-on image. Multi-platform builds must be pushed, because a
+          # manifest list cannot be loaded into the local Docker image store.
           cat > /tmp/build-addon-image.sh <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
 
-          image_prefix="$1"
+          image="$1"
           context_dir="$2"
           version="$3"
-          arch="$4"
-          tag_latest="${5:-false}"
-          output_mode="${6:-push}"
+          platforms="$4"
+          base="$5"
+          tag_latest="${6:-false}"
+          output_mode="${7:-push}"
+
+          case "${base}" in
+            alpine) build_from="ghcr.io/home-assistant/base:latest" ;;
+            debian) build_from="ghcr.io/home-assistant/base-debian:latest" ;;
+            *)
+              echo "Unsupported base: ${base}" >&2
+              exit 1
+              ;;
+          esac
 
           case "${output_mode}" in
             push) output_flag="--push" ;;
@@ -259,35 +293,24 @@ jobs:
               ;;
           esac
 
-          case "${arch}" in
-            amd64)
-              platform="linux/amd64"
-              build_from="ghcr.io/home-assistant/amd64-base:latest"
-              ;;
-            aarch64)
-              platform="linux/arm64"
-              build_from="ghcr.io/home-assistant/aarch64-base:latest"
-              ;;
-            *)
-              echo "Unsupported architecture: ${arch}" >&2
-              exit 1
-              ;;
-          esac
+          if [ "${output_mode}" = "load" ] && [ "${platforms}" != "${platforms#*,}" ]; then
+            echo "Cannot --load a multi-platform build; pass a single platform" >&2
+            exit 1
+          fi
 
-          image="${image_prefix}-${arch}"
           tags=(-t "${image}:${version}")
-
-          if [[ "${tag_latest}" == "true" ]]; then
+          if [ "${tag_latest}" = "true" ]; then
             tags+=(-t "${image}:latest")
           fi
 
+          # io.hass.arch is deliberately not set: a multi-arch build would stamp the
+          # same value onto every platform. Supervisor validates the real image
+          # architecture, and only reads the label informationally.
           docker buildx build \
-            --platform "${platform}" \
+            --platform "${platforms}" \
             --pull \
             --build-arg "BUILD_FROM=${build_from}" \
-            --build-arg "BUILD_ARCH=${arch}" \
             --build-arg "BUILD_VERSION=${version}" \
-            --label "io.hass.arch=${arch}" \
             --label "io.hass.version=${version}" \
             --label "io.hass.type=addon" \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
@@ -297,447 +320,191 @@ jobs:
             "${context_dir}"
           EOF
 
-          chmod +x /tmp/build-addon-image.sh
+          chmod +x /tmp/build-addon-image.sh /tmp/select-addons.sh
 
-      - name: Build amd64 Test Image
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
+      - name: Build and smoke test images
+        if: steps.check_version.outputs.run_steps == 'true'
         run: |
           VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          /tmp/build-addon-image.sh \
-            "ghcr.io/vineetchoudhary/home-assistant-beszel-agent" \
-            "beszel_agent" \
-            "${VERSION}" \
-            "amd64" \
-            "false"
+          IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
+          [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
 
-      - name: Retag and push only latest-test
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-amd64"
-          
-          # Pull the versioned image
-          docker pull "${IMAGE}:${VERSION}"
-          
-          # Tag as latest-test
-          docker tag "${IMAGE}:${VERSION}" "${IMAGE}:latest-test"
-          
-          # Push only latest-test tag
-          docker push "${IMAGE}:latest-test"
-          
-          # Remove the version tag from local
-          docker rmi "${IMAGE}:${VERSION}" || true
-          
-          echo "Pushed ${IMAGE}:latest-test (version tag will be created later after tests pass)"
-
-      - name: Test Beszel Agent Image (Stable)
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
-        run: |
-          echo "Testing stable beszel_agent image..."
-          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-amd64:latest-test"
-          
-          # Pull the image
-          docker pull "${IMAGE}"
-          
-          # Run the container with test environment variables
-          CONTAINER_ID=$(docker run -d \
-            -e BESZEL_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@github-actions" \
-            -e BESZEL_HUB_URL="http://0.0.0.0" \
-            -e BESZEL_TOKEN="test-token-for-ci" \
-            "${IMAGE}")
-          
-          echo "Container ID: ${CONTAINER_ID}"
-          
-          # Wait for container to initialize
-          sleep 5
-          
-          # Get container logs
-          LOGS=$(docker logs "${CONTAINER_ID}" 2>&1)
-          echo "Container logs:"
-          echo "${LOGS}"
-          
-          # Check container exit code
-          CONTAINER_STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
-          EXIT_CODE=$(docker inspect "${CONTAINER_ID}" --format='{{.State.ExitCode}}')
-          
-          echo "Container status: ${CONTAINER_STATUS}"
-          echo "Container exit code: ${EXIT_CODE}"
-          
-          # Check if container started correctly with test mode
-          if echo "${LOGS}" | grep -q "Starting Beszel Agent"; then
-            echo "✓ Container started successfully"
-            if echo "${LOGS}" | grep -q "Using KEY from environment variable (test mode)"; then
-              echo "✓ Container using test mode configuration"
-            fi
-            if echo "${LOGS}" | grep -q "Hub URL: http://0.0.0.0"; then
-              echo "✓ Hub URL configured correctly"
-            fi
-            if echo "${LOGS}" | grep -q "Starting Beszel Agent on port 45876"; then
-              echo "✓ Agent started on port 45876"
-            fi
-            if echo "${LOGS}" | grep -q "Data directory path=/var/lib/beszel-agent"; then
-              echo "✓ Data directory initialized"
-            fi
-            
-            # Check for binary execution errors
-            if echo "${LOGS}" | grep -q "cannot execute: required file not found"; then
-              echo "✗ Agent binary execution failed - architecture or library mismatch"
-              docker stop "${CONTAINER_ID}" 2>/dev/null || true
-              docker rm "${CONTAINER_ID}"
-              exit 1
-            fi
-            
-            # Verify agent is actually running (not just logs printed)
-            if [ "${CONTAINER_STATUS}" = "running" ]; then
-              echo "✓ Container is still running - agent process started successfully"
-            else
-              echo "✗ Container exited with code ${EXIT_CODE}"
-              docker stop "${CONTAINER_ID}" 2>/dev/null || true
-              docker rm "${CONTAINER_ID}"
-              exit 1
-            fi
-            
-            # Container should be running (or trying to connect to test hub)
-            docker stop "${CONTAINER_ID}" 2>/dev/null || true
-            docker rm "${CONTAINER_ID}"
-            echo "✓ Test passed for stable image"
-          else
-            echo "✗ Container failed to start properly"
-            docker rm "${CONTAINER_ID}"
+          SELECTED=$(/tmp/select-addons.sh "${IMAGE_TYPE}")
+          if [ -z "${SELECTED}" ]; then
+            echo "No add-ons matched image type '${IMAGE_TYPE}'"
             exit 1
           fi
 
-      - name: Delete test image from registry
-        if: always() && steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
+          # Smoke tests build a single platform straight into the local Docker store,
+          # so an image that fails its test never reaches the registry.
+          port=18090
+          while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
+            [ -n "${id}" ] || continue
+            IMAGE="ghcr.io/vineetchoudhary/${suffix}"
+            echo "::group::Build and test ${id} (${dir})"
+
+            # First platform in the row. A manifest list cannot be --load'ed, so the
+            # smoke test always builds exactly one platform.
+            smoke_platform="${platforms%%,*}"
+            /tmp/build-addon-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${smoke_platform}" "${base}" "false" "load"
+
+            case "${test_kind}" in
+              agent)
+                CONTAINER_ID=$(docker run -d \
+                  -e BESZEL_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@github-actions" \
+                  -e BESZEL_HUB_URL="http://0.0.0.0" \
+                  -e BESZEL_TOKEN="test-token-for-ci" \
+                  "${IMAGE}:${VERSION}")
+
+                sleep 8
+                LOGS=$(docker logs "${CONTAINER_ID}" 2>&1)
+                echo "${LOGS}"
+                STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
+                EXIT_CODE=$(docker inspect "${CONTAINER_ID}" --format='{{.State.ExitCode}}')
+                docker rm -f "${CONTAINER_ID}" >/dev/null 2>&1 || true
+
+                if ! echo "${LOGS}" | grep -q "Starting Beszel Agent"; then
+                  echo "✗ ${id}: agent did not start"
+                  exit 1
+                fi
+                if echo "${LOGS}" | grep -q "cannot execute: required file not found"; then
+                  echo "✗ ${id}: binary execution failed (architecture or libc mismatch)"
+                  exit 1
+                fi
+                if ! echo "${LOGS}" | grep -q "Starting Beszel Agent on port 45876"; then
+                  echo "✗ ${id}: agent did not reach its listen port"
+                  exit 1
+                fi
+                if [ "${STATUS}" != "running" ]; then
+                  echo "✗ ${id}: container exited with code ${EXIT_CODE}"
+                  exit 1
+                fi
+                ;;
+              hub)
+                CONTAINER_ID=$(docker run -d -p "${port}:8090" "${IMAGE}:${VERSION}")
+
+                healthy=false
+                for attempt in $(seq 1 30); do
+                  if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then
+                    healthy=true
+                    echo "Health endpoint responded after ${attempt} attempt(s)"
+                    break
+                  fi
+                  sleep 2
+                done
+
+                LOGS=$(docker logs "${CONTAINER_ID}" 2>&1)
+                echo "${LOGS}"
+                STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
+                docker rm -f "${CONTAINER_ID}" >/dev/null 2>&1 || true
+                port=$((port + 1))
+
+                if ! echo "${LOGS}" | grep -q "Starting Beszel Hub"; then
+                  echo "✗ ${id}: hub did not start"
+                  exit 1
+                fi
+                if [ "${healthy}" != "true" ]; then
+                  echo "✗ ${id}: health endpoint did not respond"
+                  exit 1
+                fi
+                if [ "${STATUS}" != "running" ]; then
+                  echo "✗ ${id}: container is not running"
+                  exit 1
+                fi
+                ;;
+            esac
+
+            docker rmi "${IMAGE}:${VERSION}" >/dev/null 2>&1 || true
+            echo "✓ Test passed for ${id}"
+            echo "::endgroup::"
+          done <<< "${SELECTED}"
+
+      - name: Publish images
+        if: steps.check_version.outputs.run_steps == 'true'
         run: |
           VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          PACKAGE_NAME="home-assistant-beszel-agent-amd64"
-          IMAGE="ghcr.io/vineetchoudhary/${PACKAGE_NAME}"
-          
-          echo "Deleting test image with version ${VERSION} from registry..."
-          
-          # Get all versions from registry
-          VERSIONS=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions")
-          
-          # Find the test image version ID (has the version tag)
-          VERSION_ID=$(echo "${VERSIONS}" | jq -r ".[] | select(.metadata.container.tags[] | select(. == \"${VERSION}\")) | .id" | head -n 1)
-          
-          if [ -n "${VERSION_ID}" ] && [ "${VERSION_ID}" != "null" ]; then
-            # Delete the test image version
-            curl -X DELETE \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/user/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
-            echo "Deleted test image version ${VERSION_ID}"
-            
-            # Restore latest tag from stable release
-            STABLE_VERSION="${{ steps.get_stable_version.outputs.VERSION }}"
-            if [ -n "${STABLE_VERSION}" ]; then
-              echo "Restoring 'latest' tag to stable version: ${STABLE_VERSION}"
-              
-              # Pull the stable release version and tag as latest
-              if docker pull "${IMAGE}:${STABLE_VERSION}" 2>/dev/null; then
-                docker tag "${IMAGE}:${STABLE_VERSION}" "${IMAGE}:latest"
-                docker push "${IMAGE}:latest"
-                echo "Restored 'latest' tag to version ${STABLE_VERSION}"
+          IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
+          [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
+
+          # One build per add-on emits a multi-arch manifest, so config.yaml can
+          # reference a single image name with no {arch} placeholder.
+          while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
+            [ -n "${id}" ] || continue
+            IMAGE="ghcr.io/vineetchoudhary/${suffix}"
+            echo "::group::Publish ${id} (${platforms})"
+            /tmp/build-addon-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${platforms}" "${base}" "true" "push"
+            echo "::endgroup::"
+          done <<< "$(/tmp/select-addons.sh "${IMAGE_TYPE}")"
+
+      - name: Tag development images with latest-dev and SHA
+        if: steps.check_version.outputs.run_steps == 'true'
+        run: |
+          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
+          IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
+          [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
+          SHA_SHORT=$(git rev-parse --short HEAD)
+
+          # imagetools retags the manifest list itself, so the multi-arch index is
+          # preserved. `docker tag` would flatten it to whatever arch was pulled.
+          for id in dev hub-dev; do
+            if [ "${IMAGE_TYPE}" != "all" ] && [ "${IMAGE_TYPE}" != "${id}" ]; then
+              continue
+            fi
+            suffix=$(awk -F'\t' -v want="${id}" '$1 == want {print $3}' /tmp/addons.tsv)
+            [ -n "${suffix}" ] || continue
+            IMAGE="ghcr.io/vineetchoudhary/${suffix}"
+
+            for tag in latest-dev "${SHA_SHORT}"; do
+              if docker buildx imagetools create -t "${IMAGE}:${tag}" "${IMAGE}:${VERSION}"; then
+                echo "✓ Tagged ${IMAGE}:${tag}"
               else
-                echo "Could not pull version ${STABLE_VERSION} - latest tag not restored"
+                echo "⚠ Could not tag ${IMAGE}:${tag}"
               fi
-            else
-              echo "No stable release found - latest tag not restored"
-            fi
-          else
-            echo "Test image already removed or not found"
-          fi
-
-      - name: Publish Stable Images
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'stable' || steps.trigger_type.outputs.image_type == '')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          for ARCH in amd64 aarch64; do
-            /tmp/build-addon-image.sh \
-              "ghcr.io/vineetchoudhary/home-assistant-beszel-agent" \
-              "beszel_agent" \
-              "${VERSION}" \
-              "${ARCH}" \
-              "true"
+            done
           done
-
-      - name: Publish S.M.A.R.T. Images
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'smart')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          for ARCH in amd64 aarch64; do
-            /tmp/build-addon-image.sh \
-              "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-smart" \
-              "beszel_agent_smart" \
-              "${VERSION}" \
-              "${ARCH}" \
-              "true"
-          done
-
-      - name: Publish Dev Images
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          for ARCH in amd64 aarch64; do
-            /tmp/build-addon-image.sh \
-              "ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev" \
-              "beszel_agent_dev" \
-              "${VERSION}" \
-              "${ARCH}" \
-              "true"
-          done
-
-      - name: Tag dev images with latest-dev and SHA
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'dev')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          SHA_SHORT=$(git rev-parse --short HEAD)
-          
-          # List of all supported architectures
-          ARCHS=("aarch64" "amd64")
-          
-          echo "Tagging dev images with latest-dev and SHA ${SHA_SHORT}..."
-          
-          for ARCH in "${ARCHS[@]}"; do
-            IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-agent-dev-${ARCH}"
-            
-            # Pull the latest image
-            if docker pull "${IMAGE}:latest" 2>/dev/null; then
-              # Tag with latest-dev and SHA
-              docker tag "${IMAGE}:latest" "${IMAGE}:latest-dev"
-              docker tag "${IMAGE}:latest" "${IMAGE}:${SHA_SHORT}"
-              
-              # Push all tags
-              docker push "${IMAGE}:latest-dev"
-              docker push "${IMAGE}:${SHA_SHORT}"
-              
-              echo "✓ Tagged ${ARCH} with latest-dev and ${SHA_SHORT}"
-            else
-              echo "⚠ Could not pull ${IMAGE}:latest - skipping tagging"
-            fi
-          done
-          
-          echo "Dev image tagging completed!"
-
-      - name: Build amd64 Hub Test Image
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'hub')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          /tmp/build-addon-image.sh \
-            "ghcr.io/vineetchoudhary/home-assistant-beszel-hub" \
-            "beszel_hub" \
-            "${VERSION}" \
-            "amd64" \
-            "false" \
-            "load"
-
-      - name: Test Beszel Hub Image
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'hub')
-        run: |
-          echo "Testing beszel_hub image..."
-          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-hub-amd64:${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-
-          CONTAINER_ID=$(docker run -d -p 18090:8090 "${IMAGE}")
-          echo "Container ID: ${CONTAINER_ID}"
-
-          healthy=false
-          for attempt in $(seq 1 30); do
-            if curl -fsS "http://127.0.0.1:18090/api/health" >/dev/null 2>&1; then
-              healthy=true
-              echo "Health endpoint responded after ${attempt} attempt(s)"
-              break
-            fi
-            sleep 2
-          done
-
-          LOGS=$(docker logs "${CONTAINER_ID}" 2>&1)
-          echo "Container logs:"
-          echo "${LOGS}"
-
-          STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
-          echo "Container status: ${STATUS}"
-
-          if ! echo "${LOGS}" | grep -q "Starting Beszel Hub"; then
-            echo "✗ beszel_hub container did not start correctly"
-            docker rm -f "${CONTAINER_ID}" || true
-            exit 1
-          fi
-
-          if [ "${healthy}" != "true" ]; then
-            echo "✗ beszel_hub health endpoint did not respond"
-            docker rm -f "${CONTAINER_ID}" || true
-            exit 1
-          fi
-
-          if [ "${STATUS}" != "running" ]; then
-            echo "✗ beszel_hub container is not running"
-            docker rm -f "${CONTAINER_ID}" || true
-            exit 1
-          fi
-
-          docker rm -f "${CONTAINER_ID}" || true
-          echo "✓ Test passed for beszel_hub image"
-
-      - name: Publish Hub Images
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'hub')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          for ARCH in amd64 aarch64; do
-            /tmp/build-addon-image.sh \
-              "ghcr.io/vineetchoudhary/home-assistant-beszel-hub" \
-              "beszel_hub" \
-              "${VERSION}" \
-              "${ARCH}" \
-              "true"
-          done
-
-      - name: Build amd64 Hub Dev Test Image
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'hub-dev')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          /tmp/build-addon-image.sh \
-            "ghcr.io/vineetchoudhary/home-assistant-beszel-hub-dev" \
-            "beszel_hub_dev" \
-            "${VERSION}" \
-            "amd64" \
-            "false" \
-            "load"
-
-      - name: Test Beszel Hub Dev Image
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'hub-dev')
-        run: |
-          echo "Testing beszel_hub_dev image..."
-          IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-hub-dev-amd64:${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-
-          CONTAINER_ID=$(docker run -d -p 18091:8090 "${IMAGE}")
-          echo "Container ID: ${CONTAINER_ID}"
-
-          healthy=false
-          for attempt in $(seq 1 30); do
-            if curl -fsS "http://127.0.0.1:18091/api/health" >/dev/null 2>&1; then
-              healthy=true
-              echo "Health endpoint responded after ${attempt} attempt(s)"
-              break
-            fi
-            sleep 2
-          done
-
-          LOGS=$(docker logs "${CONTAINER_ID}" 2>&1)
-          echo "Container logs:"
-          echo "${LOGS}"
-
-          STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
-          echo "Container status: ${STATUS}"
-
-          if ! echo "${LOGS}" | grep -q "Starting Beszel Hub"; then
-            echo "✗ beszel_hub_dev container did not start correctly"
-            docker rm -f "${CONTAINER_ID}" || true
-            exit 1
-          fi
-
-          if [ "${healthy}" != "true" ]; then
-            echo "✗ beszel_hub_dev health endpoint did not respond"
-            docker rm -f "${CONTAINER_ID}" || true
-            exit 1
-          fi
-
-          if [ "${STATUS}" != "running" ]; then
-            echo "✗ beszel_hub_dev container is not running"
-            docker rm -f "${CONTAINER_ID}" || true
-            exit 1
-          fi
-
-          docker rm -f "${CONTAINER_ID}" || true
-          echo "✓ Test passed for beszel_hub_dev image"
-
-      - name: Publish Hub Dev Images
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'hub-dev')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          for ARCH in amd64 aarch64; do
-            /tmp/build-addon-image.sh \
-              "ghcr.io/vineetchoudhary/home-assistant-beszel-hub-dev" \
-              "beszel_hub_dev" \
-              "${VERSION}" \
-              "${ARCH}" \
-              "true"
-          done
-
-      - name: Tag hub dev images with latest-dev and SHA
-        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'hub-dev')
-        run: |
-          VERSION="${{ steps.resolve_versions.outputs.ADDON_VERSION }}"
-          SHA_SHORT=$(git rev-parse --short HEAD)
-
-          # List of all supported architectures
-          ARCHS=("aarch64" "amd64")
-
-          echo "Tagging hub dev images with latest-dev and SHA ${SHA_SHORT}..."
-
-          for ARCH in "${ARCHS[@]}"; do
-            IMAGE="ghcr.io/vineetchoudhary/home-assistant-beszel-hub-dev-${ARCH}"
-
-            # Pull the latest image
-            if docker pull "${IMAGE}:latest" 2>/dev/null; then
-              # Tag with latest-dev and SHA
-              docker tag "${IMAGE}:latest" "${IMAGE}:latest-dev"
-              docker tag "${IMAGE}:latest" "${IMAGE}:${SHA_SHORT}"
-
-              # Push all tags
-              docker push "${IMAGE}:latest-dev"
-              docker push "${IMAGE}:${SHA_SHORT}"
-
-              echo "✓ Tagged ${ARCH} with latest-dev and ${SHA_SHORT}"
-            else
-              echo "⚠ Could not pull ${IMAGE}:latest - skipping tagging"
-            fi
-          done
-
-          echo "Hub dev image tagging completed!"
 
       - name: Commit add-on version update
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
           git config --global user.name "Developer Insider Bot"
           git config --global user.email "bot@developerinsider.co"
-          
-          # Add appropriate config files based on image type
+
           IMAGE_TYPE="${{ steps.trigger_type.outputs.image_type }}"
-          case "$IMAGE_TYPE" in
-            "hub")
-              git add beszel_hub/config.yaml beszel_hub/beszel_version beszel_hub/CHANGELOG.md
-              COMMIT_MSG="Update hub add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
-              ;;
-            "hub-dev")
-              git add beszel_hub_dev/config.yaml beszel_hub_dev/beszel_version beszel_hub_dev/CHANGELOG.md
-              COMMIT_MSG="Update hub dev add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
-              ;;
-            "dev")
-              git add beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version beszel_agent_dev/CHANGELOG.md
-              COMMIT_MSG="Update dev add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
-              ;;
-            "smart")
-              git add beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version beszel_agent_smart/CHANGELOG.md
-              COMMIT_MSG="Update smart add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
-              ;;
-            *)
-              git add beszel_agent/config.yaml beszel_agent/beszel_version beszel_agent/CHANGELOG.md beszel_agent_dev/config.yaml beszel_agent_dev/beszel_version beszel_agent_dev/CHANGELOG.md beszel_agent_smart/config.yaml beszel_agent_smart/beszel_version beszel_agent_smart/CHANGELOG.md beszel_hub/config.yaml beszel_hub/beszel_version beszel_hub/CHANGELOG.md beszel_hub_dev/config.yaml beszel_hub_dev/beszel_version beszel_hub_dev/CHANGELOG.md
-              # Create appropriate commit message based on trigger type
-              if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
-                COMMIT_MSG="Release ${{ github.ref_name }}: Add-on ${ADDON_VERSION}, Beszel ${BESZEL_VERSION}"
-              else
-                COMMIT_MSG="Update add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
-              fi
-              ;;
-          esac
-          
+          [ -n "${IMAGE_TYPE}" ] || IMAGE_TYPE="all"
+
+          # Only stage the add-ons this run actually published, so a single-add-on
+          # build never commits version bumps for images it did not build.
+          SELECTED_DIRS=""
+          while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
+            [ -n "${id}" ] || continue
+            git add "${dir}/config.yaml" "${dir}/beszel_version" "${dir}/CHANGELOG.md"
+            SELECTED_DIRS="${SELECTED_DIRS} ${dir}"
+          done <<< "$(/tmp/select-addons.sh "${IMAGE_TYPE}")"
+          echo "Staged:${SELECTED_DIRS}"
+
+          # Discard the version bumps written for add-ons this run did not build.
+          # Scoped to those directories rather than the whole tree on purpose.
+          while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
+            [ -n "${dir}" ] || continue
+            case " ${SELECTED_DIRS} " in
+              *" ${dir} "*) continue ;;
+            esac
+            git checkout -- "${dir}" 2>/dev/null || true
+            echo "Reverted unbuilt ${dir}"
+          done < /tmp/addons.tsv
+
+          if [ "${IMAGE_TYPE}" = "all" ]; then
+            if [[ "${{ steps.trigger_type.outputs.type }}" == "tag" ]]; then
+              COMMIT_MSG="Release ${{ github.ref_name }}: Add-on ${ADDON_VERSION}, Beszel ${BESZEL_VERSION}"
+            else
+              COMMIT_MSG="Update add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
+            fi
+          else
+            COMMIT_MSG="Update ${IMAGE_TYPE} add-on ${ADDON_VERSION} to Beszel ${BESZEL_VERSION}"
+          fi
+
           git commit -m "$COMMIT_MSG" || echo "No changes to commit"
-          
+
           # Don't push on tag releases (avoid recursion)
           if [[ "${{ steps.trigger_type.outputs.type }}" != "tag" ]]; then
             git push
@@ -756,22 +523,18 @@ jobs:
           
           git tag -a "${TAG}" -m "Release ${TAG}: Update to Beszel ${VERSION}"
           git push origin "${TAG}"
-          
+
           echo "Created and pushed tag: ${TAG}"
-        env:
-          VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
 
       - name: Create GitHub Release
         if: steps.check_version.outputs.run_steps == 'true' && steps.trigger_type.outputs.type != 'tag' && steps.trigger_type.outputs.image_type == 'all' && inputs.force_rebuild != true
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
-          release_name: Release v${{ steps.resolve_versions.outputs.ADDON_VERSION }}
-          body: |
-            ## Changes
-            - Updated Beszel add-ons to version ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
-            - Upstream release notes: https://github.com/henrygd/beszel/releases/tag/v${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
-          draft: false
-          prerelease: false
+          ADDON_VERSION: ${{ steps.resolve_versions.outputs.ADDON_VERSION }}
+          BESZEL_VERSION: ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}
+        run: |
+          gh release create "v${ADDON_VERSION}" \
+            --title "Release v${ADDON_VERSION}" \
+            --notes "## Changes
+          - Updated Beszel add-ons to version ${ADDON_VERSION}
+          - Upstream release notes: https://github.com/henrygd/beszel/releases/tag/v${BESZEL_VERSION}"

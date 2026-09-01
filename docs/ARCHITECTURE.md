@@ -46,7 +46,23 @@ They are independent. You can run only agents and point them at a hub elsewhere,
                └──────────────────┘
 ```
 
-Variants: `beszel_agent` (standard), `beszel_agent_smart` (adds S.M.A.R.T. disk health), `beszel_agent_dev` (test builds).
+Variants:
+
+| Directory | Adds | Base | Platforms |
+| --- | --- | --- | --- |
+| `beszel_agent` | - | Alpine | amd64, arm64 |
+| `beszel_agent_smart` | smartmontools | Alpine | amd64, arm64 |
+| `beszel_agent_intel` | `intel_gpu_top`, `nvtop`, smartmontools | Alpine | amd64 |
+| `beszel_agent_amd` | `amdgpu.ids`, `nvtop`, smartmontools | Alpine | amd64, arm64 |
+| `beszel_agent_nvidia` | `nvtop`, smartmontools | **Debian** | amd64, arm64 |
+| `beszel_agent_dev` | - (test builds) | Alpine | amd64, arm64 |
+
+Two things drive those choices:
+
+- `igt-gpu-tools`, which provides `intel_gpu_top`, is packaged for x86_64 only, so the Intel variant is amd64-only.
+- The NVIDIA variant uses the Debian base because the NVIDIA Container Toolkit injects a glibc-linked `nvidia-smi` and driver libraries, which will not run against musl. It also pulls the `_glibc` agent build on amd64, since Beszel compiles its NVML collector for `linux/amd64` with glibc only. See [`beszel_agent_nvidia/DOCS.md`](../beszel_agent_nvidia/DOCS.md) for why this variant is unusable on Home Assistant OS.
+
+Protection mode gates less than it appears to. Supervisor applies `privileged:` capabilities and device cgroup rules (including major 226, the DRM nodes under `/dev/dri`) regardless of protection; only `full_access` and `host_pid` are skipped for a protected add-on. In practice that means S.M.A.R.T. and Intel Xe/Arc need protection off, while AMD and i915 GPU stats usually work with it left on.
 
 ## Hub add-on
 
@@ -86,6 +102,6 @@ Variants: `beszel_agent` (standard), `beszel_agent_smart` (adds S.M.A.R.T. disk 
 └────────────────┘             └────────────────┘
 ```
 
-Variants: `beszel_hub` (standard), `beszel_hub_dev` (test builds).
+Variants: `beszel_hub` (standard), `beszel_hub_dev` (test builds). Both Alpine, amd64 + arm64.
 
 Port `8090` serves the web UI, the REST API, and the `/api/health` endpoint the Home Assistant watchdog polls. The add-on is marked `backup: cold` so Home Assistant stops it while taking a backup, which keeps the SQLite database consistent in the snapshot.

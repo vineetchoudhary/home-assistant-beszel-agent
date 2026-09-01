@@ -99,7 +99,7 @@ start_healthcheck_server() {
 }
 
 bashio::log.info "========================================"
-bashio::log.info "Starting Beszel Agent..."
+bashio::log.info "Starting Beszel Agent (NVIDIA GPU)..."
 bashio::log.info "========================================"
 
 # Get required configuration
@@ -220,12 +220,58 @@ if supervisor_api_available && bashio::config.has_value 'custom_volumes'; then
     fi
 fi
 
+# Check for S.M.A.R.T. monitoring support
+bashio::log.info "========================================"
+bashio::log.info "S.M.A.R.T. Monitoring Status"
+bashio::log.info "========================================"
+if command -v smartctl >/dev/null 2>&1; then
+    bashio::log.info "✓ smartctl available for S.M.A.R.T. monitoring"
+    
+    # Auto-detect available drives
+    DRIVES=$(smartctl --scan 2>/dev/null | awk '{print $1}' || true)
+    if [ -n "$DRIVES" ]; then
+        bashio::log.info "Available drives detected:"
+        echo "$DRIVES" | while read -r drive; do
+            bashio::log.info "  - $drive"
+        done
+    else
+        bashio::log.warning "No drives detected"
+    fi
+else
+    bashio::log.error "✗ smartctl not found"
+fi
+
+# Report GPU monitoring readiness. Beszel picks a collector automatically; set
+# GPU_COLLECTOR via environment_vars to pin one, or SKIP_GPU=true to turn it off.
+bashio::log.info "========================================"
+bashio::log.info "GPU Monitoring Status"
+bashio::log.info "========================================"
+if command -v nvidia-smi >/dev/null 2>&1; then
+    bashio::log.info "✓ nvidia-smi available"
+    if nvidia-smi --query-gpu=name --format=csv,noheader >/dev/null 2>&1; then
+        nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | while read -r gpu; do
+            bashio::log.info "  - ${gpu}"
+        done
+    else
+        bashio::log.warning "nvidia-smi is present but could not query any GPU"
+    fi
+else
+    bashio::log.error "✗ nvidia-smi not found - no NVIDIA GPU stats will be reported"
+    bashio::log.error "The NVIDIA Container Toolkit injects nvidia-smi into the container."
+    bashio::log.error "Home Assistant cannot request the NVIDIA runtime per add-on, so this"
+    bashio::log.error "only works on Home Assistant Supervised hosts configured with"
+    bashio::log.error '"default-runtime": "nvidia" in /etc/docker/daemon.json.'
+    bashio::log.error "It cannot work on Home Assistant OS. See this add-on's documentation."
+fi
+if command -v nvtop >/dev/null 2>&1; then
+    bashio::log.info "✓ nvtop available (alternate collector)"
+fi
+
 # Verify agent binary exists
 if [ ! -f /usr/local/bin/agent ]; then
     die "Beszel Agent binary not found at /usr/local/bin/agent"
 fi
 
-# Start healthcheck server
 start_healthcheck_server
 
 # Start the Beszel Agent

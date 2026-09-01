@@ -3,99 +3,55 @@ name: Validate Add-on Configuration
 on:
   pull_request:
     paths:
-      - 'beszel_agent/**'
-      - 'beszel_agent_dev/**'
-      - 'beszel_agent_smart/**'
-      - 'beszel_hub/**'
-      - 'beszel_hub_dev/**'
+      - 'beszel_agent*/**'
+      - 'beszel_hub*/**'
+      - 'scripts/**'
+      - '.github/workflows/validate.yml'
   push:
     branches:
       - main
     paths:
-      - 'beszel_agent/**'
-      - 'beszel_agent_dev/**'
-      - 'beszel_agent_smart/**'
-      - 'beszel_hub/**'
-      - 'beszel_hub_dev/**'
+      - 'beszel_agent*/**'
+      - 'beszel_hub*/**'
+      - 'scripts/**'
+      - '.github/workflows/validate.yml'
   workflow_dispatch:
+    inputs:
+      full:
+        description: 'Also build every image and run the smoke and Supervisor tests'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
-  validate:
-    name: Validate Add-on
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Validate config.yaml syntax
+      - name: Run static checks
+        run: ./scripts/test-addons.sh --static
+
+      - name: Lint add-on YAML
         run: |
-          echo "Validating config.yaml syntax..."
-          for addon in beszel_agent beszel_agent_dev beszel_agent_smart beszel_hub beszel_hub_dev; do
-            echo "Checking ${addon}/config.yaml..."
-            if command -v yamllint >/dev/null 2>&1; then
-              yamllint -d '{rules: {document-start: disable}}' ${addon}/config.yaml
-            else
-              python3 -c "import yaml; yaml.safe_load(open('${addon}/config.yaml'))"
-            fi
-            echo "✓ ${addon}/config.yaml is valid"
+          pip install --quiet yamllint
+          for config in beszel_*/config.yaml; do
+            echo "Checking ${config}..."
+            yamllint -d '{rules: {document-start: disable, line-length: disable}}' "${config}"
           done
 
-      - name: Check required files
-        run: |
-          echo "Checking required files..."
-          required_files=("config.yaml" "Dockerfile" "run.sh" "DOCS.md" "CHANGELOG.md" "beszel_version" "icon.png" "logo.png")
-          for addon in beszel_agent beszel_agent_dev beszel_agent_smart beszel_hub beszel_hub_dev; do
-            echo "Checking ${addon}..."
-            for file in "${required_files[@]}"; do
-              if [ ! -f "${addon}/$file" ]; then
-                echo "ERROR: Missing required file: ${addon}/$file"
-                exit 1
-              fi
-              echo "✓ Found: ${addon}/$file"
-            done
-          done
+  integration:
+    name: Build, smoke and Supervisor tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.full
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-      - name: Validate Dockerfile
-        run: |
-          echo "Validating Dockerfile..."
-          for addon in beszel_agent beszel_agent_dev beszel_agent_smart beszel_hub beszel_hub_dev; do
-            echo "Checking ${addon}/Dockerfile..."
-            cd ${addon}
-            docker run --rm -i hadolint/hadolint < Dockerfile || true
-            cd ..
-          done
+      - name: Build every image, smoke test it, then test it against a mock Supervisor
+        run: ./scripts/test-addons.sh --supervisor
 
-      - name: Check shell script syntax
-        run: |
-          echo "Validating shell script syntax..."
-          for addon in beszel_agent beszel_agent_dev beszel_agent_smart beszel_hub beszel_hub_dev; do
-            echo "Checking ${addon}/run.sh..."
-            bash -n ${addon}/run.sh
-            if command -v shellcheck >/dev/null 2>&1; then
-              shellcheck ${addon}/run.sh || true
-            fi
-            echo "✓ ${addon}/run.sh syntax is valid"
-          done
-
-      - name: Verify version consistency
-        run: |
-          echo "Checking version consistency..."
-          for addon in beszel_agent beszel_agent_smart beszel_hub; do
-            CONFIG_VERSION=$(grep '^version:' ${addon}/config.yaml | sed -E 's/version: "(.*)"/\1/')
-            echo "${addon} version: $CONFIG_VERSION"
-            if [[ ! "$CONFIG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-              echo "WARNING: ${addon} version does not follow expected versioning (X.Y.Z or X.Y.Z.W)"
-            fi
-          done
-
-          CONFIG_VERSION_DEV=$(grep '^version:' beszel_agent_dev/config.yaml | sed -E 's/version: "(.*)"/\1/')
-          echo "beszel_agent_dev version: $CONFIG_VERSION_DEV"
-          if [[ ! "$CONFIG_VERSION_DEV" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-dev)?$ ]]; then
-            echo "WARNING: beszel_agent_dev version should follow format X.Y.Z, X.Y.Z.W, or include -dev"
-          fi
-
-          CONFIG_VERSION_HUB_DEV=$(grep '^version:' beszel_hub_dev/config.yaml | sed -E 's/version: "(.*)"/\1/')
-          echo "beszel_hub_dev version: $CONFIG_VERSION_HUB_DEV"
-          if [[ ! "$CONFIG_VERSION_HUB_DEV" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-dev)?$ ]]; then
-            echo "WARNING: beszel_hub_dev version should follow format X.Y.Z, X.Y.Z.W, or include -dev"
-          fi
+      - name: End-to-end test (Hub + every Agent)
+        run: ./scripts/test-e2e.sh --all-agents

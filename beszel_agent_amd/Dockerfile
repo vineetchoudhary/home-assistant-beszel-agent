@@ -5,16 +5,18 @@ FROM $BUILD_FROM
 SHELL ["/bin/sh", "-o", "pipefail", "-c"]
 
 # Copy configuration and run script
-COPY config.yaml /tmp/config.yaml
 COPY beszel_version /tmp/beszel_version
 COPY run.sh /
 COPY healthcheck-http.sh /
 
-# Install Beszel Agent with S.M.A.R.T. support
+# Install Beszel Agent with AMD GPU and S.M.A.R.T. support
 # hadolint ignore=DL3018
 RUN set -eu && \
-    # Install smartmontools for S.M.A.R.T. monitoring
-    apk add --no-cache smartmontools busybox-extras && \
+    # AMD GPU stats come from sysfs, so no vendor tooling is needed. libdrm carries
+    # amdgpu.ids, which the agent reads to turn PCI ids into readable GPU names.
+    apk add --no-cache libdrm smartmontools busybox-extras && \
+    apk add --no-cache -X https://dl-cdn.alpinelinux.org/alpine/edge/testing nvtop && \
+    echo "[INFO] Installed libdrm (amdgpu.ids) and nvtop for GPU monitoring" && \
     echo "[INFO] Installed smartmontools for S.M.A.R.T. monitoring" && \
     echo "[INFO] Installed busybox-extras for watchdog health endpoint" && \
     \
@@ -40,7 +42,7 @@ RUN set -eu && \
     for i in 1 2 3; do \
         if wget --timeout=30 -q -O /tmp/beszel-agent.tar.gz "${DOWNLOAD_URL}"; then \
             break; \
-        elif [ $i -eq 3 ]; then \
+        elif [ "$i" -eq 3 ]; then \
             echo "[ERROR] Failed to download after 3 attempts" && exit 1; \
         else \
             echo "[WARN] Download attempt $i failed, retrying..." && sleep 2; \
@@ -48,7 +50,7 @@ RUN set -eu && \
     done && \
     \
     # Extract and install
-    tar -xzf /tmp/beszel-agent.tar.gz -C /tmp && \
+    tar -xzf /tmp/beszel-agent.tar.gz -C /tmp beszel-agent && \
     if [ ! -f /tmp/beszel-agent ]; then \
         echo "[ERROR] beszel-agent binary not found after extraction" && exit 1; \
     fi && \
@@ -56,8 +58,8 @@ RUN set -eu && \
     chmod +x /usr/local/bin/agent /run.sh /healthcheck-http.sh && \
     \
     # Cleanup
-    rm -rf /tmp/beszel-agent* /tmp/config.yaml /tmp/beszel_version && \
-    echo "[INFO] Beszel Agent installed successfully with S.M.A.R.T. support"
+    rm -f /tmp/beszel-agent.tar.gz /tmp/beszel_version && \
+    echo "[INFO] Beszel Agent installed successfully with AMD GPU and S.M.A.R.T. support"
 
 # Run the agent
 CMD ["/run.sh"]
