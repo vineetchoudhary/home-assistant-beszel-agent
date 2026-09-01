@@ -221,6 +221,10 @@ if [ "${DO_STATIC}" -eq 1 ]; then
             fail "${addon}: config.yaml still uses the {arch} placeholder"; ok=0
         fi
 
+        if grep -Eq '^host_pid:[[:space:]]*true' "${addon}/config.yaml"; then
+            fail "${addon}: host_pid breaks s6-overlay (init must be PID 1)"; ok=0
+        fi
+
         [ "${ok}" -eq 1 ] && pass "${addon}: config, files, version, image name"
     done
 

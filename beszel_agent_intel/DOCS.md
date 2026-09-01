@@ -20,8 +20,8 @@ Monitor your Home Assistant system with Beszel, including **Intel GPU** metrics 
 | --- | --- |
 | `/dev/dri` render nodes (`video: true`) | No - Home Assistant applies the device rules either way |
 | `PERFMON` capability, used by the i915 backend | No - capabilities are always applied |
-| Host PID namespace, required by Xe/Arc GPUs | **Yes** |
 | Disk access for S.M.A.R.T. (`full_access`) | **Yes** |
+| Add-on stats from the Docker API (`docker_api`) | **Yes** |
 
 So an older i915 Intel GPU may report fine with protection left on. **Arc and Xe GPUs, and S.M.A.R.T., need it off.** The startup log lists what the add-on can actually see.
 

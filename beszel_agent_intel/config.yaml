@@ -1,6 +1,6 @@
 name: "Beszel Agent (Intel GPU)"
 description: "Beszel Agent Add-on with Intel GPU and S.M.A.R.T. Monitoring Support"
-version: "0.18.8.3"
+version: "0.18.8.4"
 slug: "beszel-agent-intel"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
 init: false
@@ -8,7 +8,6 @@ startup: application
 boot: auto
 watchdog: "http://[HOST]:[PORT:45877]/cgi-bin/health"
 host_network: true
-host_pid: true
 full_access: true
 video: true
 docker_api: true

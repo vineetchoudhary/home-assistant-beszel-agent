@@ -62,8 +62,6 @@ Two things drive those choices:
 - `igt-gpu-tools`, which provides `intel_gpu_top`, is packaged for x86_64 only, so the Intel variant is amd64-only.
 - The NVIDIA variant uses the Debian base because the NVIDIA Container Toolkit injects a glibc-linked `nvidia-smi` and driver libraries, which will not run against musl. It also pulls the `_glibc` agent build on amd64, since Beszel compiles its NVML collector for `linux/amd64` with glibc only. See [`beszel_agent_nvidia/DOCS.md`](../beszel_agent_nvidia/DOCS.md) for why this variant is unusable on Home Assistant OS.
 
-Protection mode gates less than it appears to. Supervisor applies `privileged:` capabilities and device cgroup rules (including major 226, the DRM nodes under `/dev/dri`) regardless of protection; only `full_access` and `host_pid` are skipped for a protected add-on. In practice that means S.M.A.R.T. and Intel Xe/Arc need protection off, while AMD and i915 GPU stats usually work with it left on.
-
 ## Hub add-on
 
 ```

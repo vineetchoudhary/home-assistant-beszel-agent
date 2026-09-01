@@ -262,7 +262,7 @@ if [ -d /dev/dri ]; then
     done
 else
     bashio::log.warning "/dev/dri is not present - Intel GPU stats will be unavailable"
-    bashio::log.warning "Check that this machine has an Intel GPU; Arc/Xe also needs protection mode off"
+    bashio::log.warning "Check that this machine has an Intel GPU and that the add-on has video access"
 fi
 
 # Verify agent binary exists
