@@ -256,7 +256,11 @@ if [ "${DO_STATIC}" -eq 1 ]; then
     if command -v hadolint >/dev/null 2>&1; then
         HADOLINT="hadolint"
     elif have_docker; then
-        HADOLINT="docker run --rm -i hadolint/hadolint"
+        HL_IMAGE="hadolint/hadolint"
+        if docker image inspect "${HL_IMAGE}" >/dev/null 2>&1 ||
+                docker pull "${HL_IMAGE}" >/dev/null 2>&1; then
+            HADOLINT="docker run --rm -i ${HL_IMAGE}"
+        fi
     fi
     if [ -n "${HADOLINT}" ]; then
         hl_out=""
@@ -272,7 +276,7 @@ if [ "${DO_STATIC}" -eq 1 ]; then
             printf '%s' "${hl_out}" | sed 's/^/        /'
         fi
     else
-        skip "hadolint (not installed, Docker unavailable)"
+        skip "hadolint (not installed, unavailable via Docker)"
     fi
 fi
 
