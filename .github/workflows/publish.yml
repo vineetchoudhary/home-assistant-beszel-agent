@@ -309,6 +309,8 @@ jobs:
           docker buildx build \
             --platform "${platforms}" \
             --pull \
+            --provenance=false \
+            --sbom=false \
             --build-arg "BUILD_FROM=${build_from}" \
             --build-arg "BUILD_VERSION=${version}" \
             --label "io.hass.version=${version}" \
