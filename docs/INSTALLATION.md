@@ -171,6 +171,9 @@ For S.M.A.R.T. monitoring, you should see disk health metrics:
 ## Troubleshooting & Support
 - If you encounter issues, check the app logs for errors.
 - If Home Assistant reports watchdog failures, check whether the logs mention the HTTP health endpoint on port `45877`.
+- If host temperature sensors do not show in Beszel, check whether the app can see real sensor files:
+  - `/sys/class/hwmon/hwmon*/temp*_input`
+  - `/sys/class/thermal/thermal_zone*/temp`
 - For advanced configuration, see the main documentation or open an issue on GitHub.
 
 **Enjoy monitoring your Home Assistant system with Beszel!**
