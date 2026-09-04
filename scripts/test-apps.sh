@@ -225,6 +225,22 @@ if [ "${DO_STATIC}" -eq 1 ]; then
             fail "${app}: host_pid breaks s6-overlay (init must be PID 1)"; ok=0
         fi
 
+        if grep -Eq '^ingress:[[:space:]]*true' "${app}/config.yaml"; then
+            iport="$(sed -nE 's/^ingress_port:[[:space:]]*([0-9]+).*/\1/p' "${app}/config.yaml")"
+            if [ ! -f "${app}/ingress.conf" ]; then
+                fail "${app}: ingress: true but there is no ingress.conf"; ok=0
+            else
+                grep -q '__HUB_BASE__' "${app}/ingress.conf" \
+                    || { fail "${app}: ingress.conf has no __HUB_BASE__ placeholder"; ok=0; }
+                grep -q '__HUB_BASE__' "${app}/run.sh" \
+                    || { fail "${app}: run.sh never substitutes __HUB_BASE__"; ok=0; }
+                grep -Eq "^[[:space:]]*listen[[:space:]]+${iport}([[:space:]]|;)" "${app}/ingress.conf" \
+                    || { fail "${app}: ingress.conf does not listen on ingress_port ${iport}"; ok=0; }
+                grep -q '172.30.32.2' "${app}/ingress.conf" \
+                    || { fail "${app}: ingress.conf does not restrict access to the Supervisor"; ok=0; }
+            fi
+        fi
+
         [ "${ok}" -eq 1 ] && pass "${app}: config, files, version, image name"
     done
 
@@ -357,6 +373,21 @@ if [ "${DO_SMOKE}" -eq 1 ]; then
                 sleep 1
             done
             [ "${healthy}" -eq 1 ] || { fail "${app}: /api/health never responded"; ok=0; }
+
+            if grep -Eq '^ingress:[[:space:]]*true' "${app}/config.yaml"; then
+                iport="$(sed -nE 's/^ingress_port:[[:space:]]*([0-9]+).*/\1/p' "${app}/config.yaml")"
+                ihtml="$(docker exec "${cname}" curl -fsS \
+                    -H "X-Ingress-Path: /api/hassio_ingress/TESTTOKEN" \
+                    "http://127.0.0.1:${iport}/" 2>/dev/null || true)"
+                if [ -z "${ihtml}" ]; then
+                    fail "${app}: Ingress proxy on port ${iport} did not respond"; ok=0
+                else
+                    echo "${ihtml}" | grep -q '"BASE_PATH":"/api/hassio_ingress/TESTTOKEN/"' \
+                        || { fail "${app}: Ingress did not rewrite BASE_PATH"; ok=0; }
+                    echo "${ihtml}" | grep -q 'src="/api/hassio_ingress/TESTTOKEN/assets/' \
+                        || { fail "${app}: Ingress did not rewrite asset paths"; ok=0; }
+                fi
+            fi
         else
             sleep 8
         fi

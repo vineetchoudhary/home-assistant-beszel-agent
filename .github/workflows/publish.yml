@@ -388,6 +388,10 @@ jobs:
                   sleep 2
                 done
 
+                INGRESS_HTML=$(docker exec "${CONTAINER_ID}" curl -fsS \
+                  -H "X-Ingress-Path: /api/hassio_ingress/TESTTOKEN" \
+                  http://127.0.0.1:8099/ 2>/dev/null || true)
+
                 LOGS=$(docker logs "${CONTAINER_ID}" 2>&1)
                 echo "${LOGS}"
                 STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
@@ -400,6 +404,18 @@ jobs:
                 fi
                 if [ "${healthy}" != "true" ]; then
                   echo "✗ ${id}: health endpoint did not respond"
+                  exit 1
+                fi
+                if [ -z "${INGRESS_HTML}" ]; then
+                  echo "✗ ${id}: Ingress proxy on port 8099 did not respond"
+                  exit 1
+                fi
+                if ! echo "${INGRESS_HTML}" | grep -q '"BASE_PATH":"/api/hassio_ingress/TESTTOKEN/"'; then
+                  echo "✗ ${id}: Ingress did not rewrite BASE_PATH"
+                  exit 1
+                fi
+                if ! echo "${INGRESS_HTML}" | grep -q 'src="/api/hassio_ingress/TESTTOKEN/assets/'; then
+                  echo "✗ ${id}: Ingress did not rewrite asset paths"
                   exit 1
                 fi
                 if [ "${STATUS}" != "running" ]; then

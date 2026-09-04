@@ -5,8 +5,13 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 COPY beszel_version /tmp/beszel_version
 COPY run.sh /
+COPY ingress.conf /etc/nginx/ingress.conf.template
 
+# hadolint ignore=DL3018
 RUN set -euo pipefail && \
+    apk add --no-cache nginx && \
+    rm -f /etc/nginx/http.d/default.conf && \
+    echo "[INFO] Installed nginx for Home Assistant Ingress support" && \
     BESZEL_VERSION=$(tr -d '[:space:]' < /tmp/beszel_version) && \
     if [ -z "${BESZEL_VERSION}" ]; then \
         echo "[ERROR] Failed to extract version from beszel_version" && exit 1; \

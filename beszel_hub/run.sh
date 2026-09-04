@@ -12,6 +12,73 @@ supervisor_api_available() {
     [ -n "${SUPERVISOR_TOKEN:-}" ]
 }
 
+hub_base_path() {
+    local app_url="${1:-}" base="/" rest
+
+    case "${app_url}" in
+        *://*)
+            rest="${app_url#*://}"
+            case "${rest}" in
+                */*)
+                    base="/${rest#*/}"
+                    base="${base%%[?]*}"
+                    base="${base%%#*}"
+                    case "${base}" in
+                        */) ;;
+                        *) base="${base}/" ;;
+                    esac
+                    ;;
+            esac
+            ;;
+    esac
+
+    printf '%s' "${base}"
+}
+
+start_ingress_proxy() {
+    local hub_base test_output line
+
+    hub_base="$(hub_base_path "${1:-}")"
+
+    case "${hub_base}" in
+        *[!A-Za-z0-9._~/-]*)
+            bashio::log.warning "The app_url path cannot be mapped to an Ingress prefix: ${hub_base}"
+            bashio::log.warning "Ingress is unavailable; the hub is still reachable on port 8090"
+            return 1
+            ;;
+    esac
+
+    bashio::log.info "Hub base path: ${hub_base}"
+    sed "s|__HUB_BASE__|${hub_base}|g" \
+        /etc/nginx/ingress.conf.template > /etc/nginx/http.d/ingress.conf
+
+    mkdir -p /run/nginx
+
+    if ! test_output="$(nginx -t 2>&1)"; then
+        bashio::log.warning "nginx config test failed - Ingress will be unavailable"
+        while IFS= read -r line; do
+            bashio::log.warning "${line}"
+        done <<< "${test_output}"
+        return 1
+    fi
+
+    if ! nginx; then
+        bashio::log.warning "nginx failed to start - Ingress will be unavailable"
+        return 1
+    fi
+
+    for _ in 1 2 3; do
+        if [ -s /run/nginx/nginx.pid ]; then
+            bashio::log.info "Ingress proxy listening on port 8099"
+            return 0
+        fi
+        sleep 1
+    done
+
+    bashio::log.warning "nginx exited immediately after starting - Ingress will be unavailable"
+    return 1
+}
+
 bashio::log.info "========================================"
 bashio::log.info "Starting Beszel Hub..."
 bashio::log.info "========================================"
@@ -66,6 +133,9 @@ fi
 # Beszel resolves its default "beszel_data" relative to the current directory.
 DATA_DIR="/var/lib/beszel-hub/beszel_data"
 mkdir -p "${DATA_DIR}"
+
+APP_URL="${BESZEL_HUB_APP_URL:-${APP_URL:-}}"
+start_ingress_proxy "${APP_URL}" || true
 
 bashio::log.info "Hub data directory: ${DATA_DIR}"
 bashio::log.info "Beszel Hub web UI available at http://[HOST]:8090"

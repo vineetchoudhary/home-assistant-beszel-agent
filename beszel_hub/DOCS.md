@@ -1,11 +1,11 @@
 # Beszel Hub for Home Assistant
 
-Run the Beszel Hub directly inside Home Assistant. This add-on hosts the Beszel web UI and API so smaller setups do not need a separate Docker or Kubernetes deployment for the hub.
+Run the Beszel Hub directly inside Home Assistant. This app hosts the Beszel web UI and API so smaller setups do not need a separate Docker or Kubernetes deployment for the hub.
 
-## What this add-on does
+## What this app does
 
 - Hosts the Beszel web UI and API on port `8090`
-- Persists the hub database, SSH keys, and other runtime data in the add-on data directory
+- Persists the hub database, SSH keys, and other runtime data in the app data directory
 - Supports optional `APP_URL` configuration and additional Beszel Hub environment variables
 
 ## Configuration
@@ -54,17 +54,20 @@ These are read by a one-time database migration, so **adding them later has no e
 
 ## Getting started
 
-2. Open the web UI at `http://<home-assistant-host>:8090`.
 1. Install and start the app.
+2. Open the web UI from the Home Assistant sidebar, or directly at `http://<home-assistant-host>:8090`.
 3. Create the first admin user when prompted.
 4. Add systems from the Beszel UI and point Agents at this Hub.
 
 ## Notes
 
-- The Home Assistant watchdog checks `http://[HOST]:8090/api/health`. It uses the same published port as the web UI, so clearing that port in the add-on's network settings also breaks the watchdog.
-- The hub database, SSH key, and uploads live in the add-on data directory, which Home Assistant includes in backups. The add-on is set to `backup: cold`, so Home Assistant stops it for the duration of a backup - the hub is briefly unreachable, but the SQLite database is captured in a consistent state.
-- This add-on is not served through Home Assistant Ingress. Beszel derives its base path from `app_url`, and Ingress URLs contain a per-session token, so there is no stable path to configure. Use the published port `8090` (or your own reverse proxy) instead.
-- Agents can run either as the add-ons in this repository or on external machines.
+- The Home Assistant watchdog checks `http://[HOST]:8090/api/health`. It uses the same published port as the web UI, so clearing that port in the app's network settings also breaks the watchdog.
+- The hub database, SSH key, and uploads live in the app data directory, which Home Assistant includes in backups. The app is set to `backup: cold`, so Home Assistant stops it for the duration of a backup - the hub is briefly unreachable, but the SQLite database is captured in a consistent state.
+- The app is served through Home Assistant Ingress, so it appears in the sidebar and needs no port to be opened for the UI. An nginx front-end inside the app rewrites the paths Beszel bakes into its HTML to the per-session Ingress prefix on each request, so the changing Ingress token is handled automatically.
+- Port `8090` stays published and is still needed: Agents connect to the Hub on it, and it remains available for direct access and reverse proxies. Ingress covers the browser UI only.
+- **Set `app_url` if you use Ingress.** The "add system" dialog builds the Agent install commands from `app_url`, falling back to the address in your browser's URL bar. Viewed through Ingress that fallback is the Home Assistant address, which Agents cannot use to reach the Hub, so the generated commands would be wrong. Set `app_url` to the Hub's own reachable URL, for example `http://<home-assistant-host>:8090`.
+- If the Ingress panel does not load, check the app log. Ingress is never fatal: when the proxy cannot start - for example because the path in `app_url` cannot be mapped to an Ingress prefix - the app logs a warning and carries on serving the Hub on port `8090`.
+- Agents can run either as the apps in this repository or on external machines.
 
 ## Need Help?
 
