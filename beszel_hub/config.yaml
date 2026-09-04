@@ -1,6 +1,6 @@
 name: "Beszel Hub"
 description: "Beszel Hub Add-on"
-version: "0.19.0"
+version: "0.19.0.1"
 slug: "beszel-hub"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
 init: false
