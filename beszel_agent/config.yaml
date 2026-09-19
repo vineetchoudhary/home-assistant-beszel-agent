@@ -1,6 +1,6 @@
 name: "Beszel Agent"
 description: "Beszel Agent Add-on"
-version: "0.19.0.1"
+version: "0.19.0.2"
 slug: "beszel-agent"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
 init: false
@@ -40,3 +40,5 @@ map:
   - type: data
     read_only: false
     path: /var/lib/beszel-agent
+  - type: ssl
+    read_only: true

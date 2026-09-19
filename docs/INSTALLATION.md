@@ -117,6 +117,21 @@ environment_vars:
 
 Check available beszel agent environment variables [here](https://www.beszel.dev/guide/environment-variables#agent).
 
+**CA_CERT_FILE** - Trust a Hub that uses a self-signed certificate
+
+Since Beszel 0.19.0 agents verify HTTPS certificates. If your `hub_url` is an `https://` address served by a self-signed or otherwise untrusted certificate, the agent rejects the connection until you point it at the signing CA.
+
+The Agent apps mount Home Assistant's `/ssl` folder read-only - the same folder your Home Assistant certificates live in. Copy the CA certificate there (over Samba, the File editor app, or `scp`), then name it with `CA_CERT_FILE`:
+
+```yaml
+hub_url: "https://beszel.example.com"
+environment_vars:
+  - name: CA_CERT_FILE
+    value: "/ssl/beszel-ca.crt"
+```
+
+The file must be PEM encoded. If `CA_CERT_FILE` is set but the file cannot be read or contains no valid certificate, the agent stops at startup rather than falling back to an unverified connection, and Home Assistant's watchdog will keep restarting it - check the log for a `CA_CERT_FILE` error. Leave the setting unset if your Hub uses plain HTTP or a publicly trusted certificate.
+
 **custom_volumes** - Check that a path is visible to the app
 
 ```yaml
@@ -171,6 +186,7 @@ For S.M.A.R.T. monitoring, you should see disk health metrics:
 ## Troubleshooting & Support
 - If you encounter issues, check the app logs for errors.
 - If Home Assistant reports watchdog failures, check whether the logs mention the HTTP health endpoint on port `45877`.
+- If an Agent app stops right after starting with a `CA_CERT_FILE` error, the certificate path is wrong or the file is not valid PEM. Confirm the file is in `/ssl` and that `CA_CERT_FILE` points at it.
 - If host temperature sensors do not show in Beszel, check whether the app can see real sensor files:
   - `/sys/class/hwmon/hwmon*/temp*_input`
   - `/sys/class/thermal/thermal_zone*/temp`
