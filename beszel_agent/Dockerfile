@@ -36,7 +36,8 @@ RUN set -euo pipefail && \
     DOWNLOAD_URL="https://github.com/henrygd/beszel/releases/download/v${BESZEL_VERSION}/beszel-agent_linux_${BESZEL_ARCH}.tar.gz" && \
     echo "[INFO] Downloading from: ${DOWNLOAD_URL}" && \
     for i in 1 2 3; do \
-        if wget --timeout=30 -q -O /tmp/beszel-agent.tar.gz "${DOWNLOAD_URL}"; then \
+        if curl --fail --location --silent --show-error --connect-timeout 30 --max-time 120 \
+            --output /tmp/beszel-agent.tar.gz "${DOWNLOAD_URL}"; then \
             break; \
         elif [ $i -eq 3 ]; then \
             echo "[ERROR] Failed to download after 3 attempts" && exit 1; \
