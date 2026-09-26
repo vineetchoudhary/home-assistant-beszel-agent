@@ -12,6 +12,12 @@ supervisor_api_available() {
     [ -n "${SUPERVISOR_TOKEN:-}" ]
 }
 
+readonly INGRESS_AUTH_HEADER="X-Beszel-User"
+
+valid_ingress_user() {
+    [[ "${1}" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]
+}
+
 hub_base_path() {
     local app_url="${1:-}" base="/" rest
 
@@ -36,9 +42,10 @@ hub_base_path() {
 }
 
 start_ingress_proxy() {
-    local hub_base test_output line
+    local hub_base ingress_user test_output line
 
     hub_base="$(hub_base_path "${1:-}")"
+    ingress_user="${2:-}"
 
     case "${hub_base}" in
         *[!A-Za-z0-9._~/-]*)
@@ -49,7 +56,10 @@ start_ingress_proxy() {
     esac
 
     bashio::log.info "Hub base path: ${hub_base}"
-    sed "s|__HUB_BASE__|${hub_base}|g" \
+    # An empty ingress_user leaves the header value empty, which makes nginx drop
+    # the header, so nothing is trusted while the feature is off.
+    sed -e "s|__HUB_BASE__|${hub_base}|g" \
+        -e "s|__INGRESS_USER__|${ingress_user}|g" \
         /etc/nginx/ingress.conf.template > /etc/nginx/http.d/ingress.conf
 
     mkdir -p /run/nginx
@@ -105,6 +115,17 @@ else
     bashio::log.info "App URL not configured; Beszel Hub will use its default URL"
 fi
 
+# Account that Ingress visitors are signed in as
+INGRESS_USER=""
+if supervisor_api_available && bashio::config.has_value 'ingress_user'; then
+    INGRESS_USER="$(bashio::config 'ingress_user')"
+    if ! valid_ingress_user "${INGRESS_USER}"; then
+        bashio::log.warning "ingress_user is not a valid email address: ${INGRESS_USER}"
+        bashio::log.warning "Ingress auto-login is disabled; the hub will ask for a password as usual"
+        INGRESS_USER=""
+    fi
+fi
+
 if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
     bashio::log.info "Processing custom environment variables..."
     index=0
@@ -128,6 +149,23 @@ if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
     done
 fi
 
+TRUSTED_HEADER_SET="${BESZEL_HUB_TRUSTED_AUTH_HEADER:-${TRUSTED_AUTH_HEADER:-}}"
+TRUSTED_PROXIES_SET="${BESZEL_HUB_TRUSTED_PROXY_IPS:-${TRUSTED_PROXY_IPS:-}}"
+AUTO_LOGIN_SET="${BESZEL_HUB_AUTO_LOGIN:-${AUTO_LOGIN:-}}"
+
+if [ -n "${AUTO_LOGIN_SET}" ]; then
+    bashio::log.warning "AUTO_LOGIN is set: every request is signed in as ${AUTO_LOGIN_SET}"
+    bashio::log.warning "This includes direct access on port 8090, which no longer asks for a password"
+    if [ -n "${INGRESS_USER}" ]; then
+        bashio::log.warning "AUTO_LOGIN takes precedence over ingress_user; remove it to limit auto-login to Ingress"
+    fi
+elif [ -n "${INGRESS_USER}" ] && [ -n "${TRUSTED_HEADER_SET}" ]; then
+    bashio::log.warning "ingress_user replaces the TRUSTED_AUTH_HEADER set in environment_vars"
+elif [ -n "${TRUSTED_HEADER_SET}" ] && [ -z "${TRUSTED_PROXIES_SET}" ]; then
+    bashio::log.warning "TRUSTED_AUTH_HEADER is set without TRUSTED_PROXY_IPS"
+    bashio::log.warning "Any client that can reach port 8090 can use it to sign in as any user"
+fi
+
 # Mapped to the app data directory by config.yaml, so it survives restarts and
 # updates. Passed explicitly rather than relying on the working directory, because
 # Beszel resolves its default "beszel_data" relative to the current directory.
@@ -135,7 +173,16 @@ DATA_DIR="/var/lib/beszel-hub/beszel_data"
 mkdir -p "${DATA_DIR}"
 
 APP_URL="${BESZEL_HUB_APP_URL:-${APP_URL:-}}"
-start_ingress_proxy "${APP_URL}" || true
+if start_ingress_proxy "${APP_URL}" "${INGRESS_USER}"; then
+    if [ -n "${INGRESS_USER}" ]; then
+        export BESZEL_HUB_TRUSTED_AUTH_HEADER="${INGRESS_AUTH_HEADER}"
+        export BESZEL_HUB_TRUSTED_PROXY_IPS="127.0.0.1"
+        bashio::log.info "Ingress auto-login enabled for ${INGRESS_USER}"
+        bashio::log.info "Direct access on port 8090 still requires a password"
+    fi
+elif [ -n "${INGRESS_USER}" ]; then
+    bashio::log.warning "Ingress auto-login is unavailable because the Ingress proxy did not start"
+fi
 
 bashio::log.info "Hub data directory: ${DATA_DIR}"
 bashio::log.info "Beszel Hub web UI available at http://[HOST]:8090"

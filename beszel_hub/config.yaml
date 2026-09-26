@@ -26,6 +26,7 @@ options:
   environment_vars: []
 schema:
   app_url: str?
+  ingress_user: email?
   environment_vars:
     - name: str
       value: str
