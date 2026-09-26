@@ -232,8 +232,10 @@ if [ "${DO_STATIC}" -eq 1 ]; then
             else
                 grep -q '__HUB_BASE__' "${app}/ingress.conf" \
                     || { fail "${app}: ingress.conf has no __HUB_BASE__ placeholder"; ok=0; }
-                grep -q '__HUB_BASE__' "${app}/run.sh" \
-                    || { fail "${app}: run.sh never substitutes __HUB_BASE__"; ok=0; }
+                for ph in $(grep -oE '__[A-Z][A-Z0-9_]*__' "${app}/ingress.conf" | sort -u); do
+                    grep -q "${ph}" "${app}/run.sh" \
+                        || { fail "${app}: run.sh never substitutes ${ph}"; ok=0; }
+                done
                 grep -Eq "^[[:space:]]*listen[[:space:]]+${iport}([[:space:]]|;)" "${app}/ingress.conf" \
                     || { fail "${app}: ingress.conf does not listen on ingress_port ${iport}"; ok=0; }
                 grep -q '172.30.32.2' "${app}/ingress.conf" \
@@ -324,18 +326,21 @@ if [ "${DO_BUILD}" -eq 1 ]; then
         esac
 
         info "${app}: ${platform} from $(basename "${base}")${note}"
-        if docker build --platform "${platform}" --build-arg "BUILD_FROM=${base}" \
-                -t "${image}" "${app}/" >/tmp/beszel-build-$$.log 2>&1; then
+        build_log="$(mktemp "${TMPDIR:-/tmp}/beszel-build-${app}.XXXXXX")" || exit 1
+        if docker build --progress=plain --platform "${platform}" --build-arg "BUILD_FROM=${base}" \
+                -t "${image}" "${app}/" >"${build_log}" 2>&1; then
+            rm -f "${build_log}"
             CREATED_IMAGES="${CREATED_IMAGES} ${image}"
             size="$(docker images "${image}" --format '{{.Size}}')"
             pass "${app}: built (${size})"
             record "${app}" build ok
         else
             fail "${app}: build failed"
-            tail -20 /tmp/beszel-build-$$.log | sed 's/^/        /'
+            # The Dockerfile excerpt at the end can hide the actual error.
+            sed 's/^/        /' "${build_log}"
+            info "Full build log saved to ${build_log}"
             record "${app}" build FAIL
         fi
-        rm -f /tmp/beszel-build-$$.log
     done
 fi
 
@@ -446,6 +451,7 @@ AGENT = {
 }
 HUB = {
     "app_url": "https://beszel.example.com",
+    "ingress_user": "ingress@example.com",
     "environment_vars": [
         {"name": "SHARE_ALL_SYSTEMS", "value": "true"},
         {"name": "BAD NAME", "value": "must-be-skipped"},
@@ -514,6 +520,26 @@ EOF
             if [ "${kind}" = "hub" ]; then
                 echo "${logs}" | grep -q "App URL: https://beszel.example.com" \
                     || { fail "${app}: app_url was not read from the Supervisor API"; ok=0; }
+                echo "${logs}" | grep -q "Ingress auto-login enabled for ingress@example.com" \
+                    || { fail "${app}: ingress_user did not enable Ingress auto-login"; ok=0; }
+                docker exec "${cname}" sh -c \
+                    'grep -q "proxy_set_header X-Beszel-User \"ingress@example.com\";" /etc/nginx/http.d/ingress.conf' \
+                    >/dev/null 2>&1 \
+                    || { fail "${app}: nginx does not set the trusted auth header"; ok=0; }
+                if ! docker exec -i "${cname}" sh -s >/dev/null 2>&1 <<'PROCENV'
+for d in /proc/[0-9]*; do
+    [ -r "${d}/environ" ] || continue
+    case "$(tr '\0' ' ' < "${d}/cmdline" 2>/dev/null)" in
+        *beszel\ serve*) ;;
+        *) continue ;;
+    esac
+    tr '\0' '\n' < "${d}/environ" | grep -qx 'BESZEL_HUB_TRUSTED_PROXY_IPS=127.0.0.1' && exit 0
+done
+exit 1
+PROCENV
+                then
+                    fail "${app}: trusted auth header is not restricted to the loopback proxy"; ok=0
+                fi
             else
                 echo "${logs}" | grep -q "Hub URL: http://hub.invalid:8090" \
                     || { fail "${app}: hub_url was not read from the Supervisor API"; ok=0; }
