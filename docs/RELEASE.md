@@ -6,7 +6,7 @@ Three ways a release happens.
 To keep the apps synced with upstream Beszel automatically, the GitHub Actions Workflow checks for new Beszel versions and:
 
 1. Checks upstream Beszel for a new release
-2. Updates `config.yaml`, `beszel_version`, and `CHANGELOG.md` for every app
+2. Updates `config.yaml`, `beszel_version`, `beszel_sha256`, and `CHANGELOG.md` for every app
 3. Builds and publishes images to GHCR
 4. Commits the repository changes
 5. Creates a git tag and GitHub release if needed
@@ -47,6 +47,8 @@ Two different versions to keep track of:
 
 - **Beszel version**: stored in `beszel_version`
 - **App version**: stored in `config.yaml` and git tags
+
+Alongside `beszel_version`, each app carries a `beszel_sha256` holding the SHA-256 of the release tarballs it installs. The Dockerfile checks the download against it and fails the build on a mismatch, so the two files have to move together. Both `scripts/bump-version.sh --beszel` and the publish workflow call `scripts/refresh-checksums.sh` to keep them in step; you should not need to edit the digests by hand. If upstream ever renames a release asset, correct the asset column in `beszel_sha256` once and the refresh follows it from then on.
 
 Tag-based releases use the git tag as the app version and keep the current upstream Beszel version from `beszel_version`.
 

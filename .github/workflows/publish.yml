@@ -201,6 +201,10 @@ jobs:
             cp /tmp/CHANGELOG.md "${dir}/CHANGELOG.md"
           done
 
+          # The Dockerfiles verify their download against beszel_sha256, so the
+          # digests have to move with beszel_version or every build fails.
+          ./scripts/refresh-checksums.sh "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
+
           echo "Updated app version to ${{ steps.resolve_versions.outputs.APP_VERSION }}"
           echo "Updated upstream Beszel version to ${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
 
@@ -461,7 +465,7 @@ jobs:
           SELECTED_DIRS=""
           while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
             [ -n "${id}" ] || continue
-            git add "${dir}/config.yaml" "${dir}/beszel_version" "${dir}/CHANGELOG.md"
+            git add "${dir}/config.yaml" "${dir}/beszel_version" "${dir}/beszel_sha256" "${dir}/CHANGELOG.md"
             SELECTED_DIRS="${SELECTED_DIRS} ${dir}"
           done <<< "$(/tmp/select-apps.sh "${IMAGE_TYPE}")"
           echo "Staged:${SELECTED_DIRS}"

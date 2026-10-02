@@ -1,0 +1,10 @@
+# SHA-256 digests of the upstream Beszel release assets this add-on installs.
+#
+# Each line is copied verbatim from beszel_<version>_checksums.txt in the
+# upstream release named by beszel_version, so the format is exactly what
+# sha256sum reads. The Dockerfile looks the asset up by name and refuses to
+# unpack a tarball whose digest does not match.
+#
+# Regenerate with scripts/refresh-checksums.sh rather than editing by hand.
+63b20d6ca328dc08e588126da2e13f8bece6ae875de5f25a058f48cb6ea19998  beszel_linux_amd64.tar.gz
+303f144f865a24b95b539740222dc65dc376b25526c8430eb5b093f3759e337c  beszel_linux_arm64.tar.gz
