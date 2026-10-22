@@ -149,6 +149,7 @@ fi
 for app in ${APPS}; do
     [ -f "${app}/config.yaml" ]    || die "${app}: no config.yaml"
     [ -f "${app}/beszel_version" ] || die "${app}: no beszel_version"
+    [ -f "${app}/beszel_sha256" ]  || die "${app}: no beszel_sha256"
     [ -n "$(config_version "${app}")" ] || die "${app}: config.yaml has no 'version: \"...\"' line"
 done
 
@@ -163,6 +164,7 @@ show_versions
 head1 "Bumping to ${APP_VERSION}"
 if [ "${BUMP_BESZEL}" -eq 1 ]; then
     info "upstream Beszel version -> ${BESZEL_VERSION}"
+    info "beszel_sha256 refreshed from the v${BESZEL_VERSION} checksums file"
 else
     info "upstream Beszel version left untouched (pass --beszel to move it too)"
 fi
@@ -221,6 +223,19 @@ for app in ${APPS}; do
 done
 
 # ---------------------------------------------------------------------------
+# Checksums
+# ---------------------------------------------------------------------------
+# The Dockerfiles verify the tarball they download against beszel_sha256, so a
+# beszel_version bump that left the digests behind would fail every build.
+if [ "${BUMP_BESZEL}" -eq 1 ]; then
+    REFRESH_ARGS=""
+    [ "${DRY_RUN}" -eq 1 ] && REFRESH_ARGS="--dry-run"
+    # shellcheck disable=SC2086
+    "${REPO_ROOT}/scripts/refresh-checksums.sh" "${BESZEL_VERSION}" ${REFRESH_ARGS} \
+        || die "Could not refresh beszel_sha256 for ${BESZEL_VERSION}"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 head1 "Summary"
@@ -237,6 +252,10 @@ for app in ${APPS}; do
     if [ "${BUMP_BESZEL}" -eq 1 ]; then
         [ "$(pinned_version "${app}")" = "${BESZEL_VERSION}" ] \
             || die "${app}: beszel_version did not settle at ${BESZEL_VERSION}"
+        [ -s "${app}/beszel_sha256" ] \
+            || die "${app}: beszel_sha256 is missing or empty"
+        grep -qE '^[0-9a-f]{64}  ' "${app}/beszel_sha256" \
+            || die "${app}: beszel_sha256 holds no digests"
     fi
 done
 pass "all apps report ${APP_VERSION}"

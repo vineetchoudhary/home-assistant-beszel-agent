@@ -6,6 +6,7 @@ SHELL ["/bin/sh", "-o", "pipefail", "-c"]
 
 # Copy configuration and run script
 COPY beszel_version /tmp/beszel_version
+COPY beszel_sha256 /tmp/beszel_sha256
 COPY run.sh /
 COPY healthcheck-http.sh /
 
@@ -37,7 +38,8 @@ RUN set -eu && \
     echo "[INFO] Detected architecture: ${ARCH} -> ${BESZEL_ARCH}" && \
     \
     # Download and install Beszel Agent with retries
-    DOWNLOAD_URL="https://github.com/henrygd/beszel/releases/download/v${BESZEL_VERSION}/beszel-agent_linux_${BESZEL_ARCH}.tar.gz" && \
+    BESZEL_ASSET="beszel-agent_linux_${BESZEL_ARCH}.tar.gz" && \
+    DOWNLOAD_URL="https://github.com/henrygd/beszel/releases/download/v${BESZEL_VERSION}/${BESZEL_ASSET}" && \
     echo "[INFO] Downloading from: ${DOWNLOAD_URL}" && \
     for i in 1 2 3; do \
         if curl --fail --location --silent --show-error --connect-timeout 30 --max-time 120 \
@@ -50,6 +52,19 @@ RUN set -eu && \
         fi; \
     done && \
     \
+    # Verify the download before unpacking it. beszel_sha256 carries the lines
+    # for this app's assets, copied verbatim from the upstream release's
+    # checksums file. A mismatch, or an asset with no pinned digest, fails the
+    # build rather than installing an unverified binary.
+    EXPECTED_SHA=$(awk -v asset="${BESZEL_ASSET}" '$2 == asset { print $1 }' /tmp/beszel_sha256) && \
+    if [ -z "${EXPECTED_SHA}" ]; then \
+        echo "[ERROR] No pinned SHA-256 for ${BESZEL_ASSET} in beszel_sha256" && exit 1; \
+    fi && \
+    if ! echo "${EXPECTED_SHA}  /tmp/beszel-agent.tar.gz" | sha256sum -c - > /dev/null 2>&1; then \
+        echo "[ERROR] Checksum mismatch for ${BESZEL_ASSET}" && exit 1; \
+    fi && \
+    echo "[INFO] Checksum verified for ${BESZEL_ASSET}" && \
+    \
     # Extract and install
     tar -xzf /tmp/beszel-agent.tar.gz -C /tmp beszel-agent && \
     if [ ! -f /tmp/beszel-agent ]; then \
@@ -59,7 +74,7 @@ RUN set -eu && \
     chmod +x /usr/local/bin/agent /run.sh /healthcheck-http.sh && \
     \
     # Cleanup
-    rm -f /tmp/beszel-agent.tar.gz /tmp/beszel_version && \
+    rm -f /tmp/beszel-agent.tar.gz /tmp/beszel_version /tmp/beszel_sha256 && \
     echo "[INFO] Beszel Agent installed successfully with Intel GPU and S.M.A.R.T. support"
 
 # Run the agent
