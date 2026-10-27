@@ -5,16 +5,22 @@ on:
     paths:
       - 'beszel_agent*/**'
       - 'beszel_hub*/**'
+      - 'beszel_bridge/**'
+      - 'docs/dashboards/beszel/**'
       - 'scripts/**'
       - '.github/workflows/validate.yml'
+      - '.github/workflows/publish.yml'
   push:
     branches:
       - main
     paths:
       - 'beszel_agent*/**'
       - 'beszel_hub*/**'
+      - 'beszel_bridge/**'
+      - 'docs/dashboards/beszel/**'
       - 'scripts/**'
       - '.github/workflows/validate.yml'
+      - '.github/workflows/publish.yml'
   workflow_dispatch:
     inputs:
       full:
@@ -55,3 +61,6 @@ jobs:
 
       - name: End-to-end test (Hub + every Agent)
         run: ./scripts/test-e2e.sh --all-agents
+
+      - name: Bridge to real Home Assistant entity and dashboard tests
+        run: python3 scripts/test-bridge-e2e.py --build --hub-version "$(cat beszel_hub/beszel_version)"

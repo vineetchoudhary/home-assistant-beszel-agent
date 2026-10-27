@@ -1,0 +1,5 @@
+testdata
+*.md
+*_test.go
+icon.png
+logo.png

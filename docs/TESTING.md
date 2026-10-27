@@ -154,16 +154,16 @@ That runs three phases:
 
 | Phase | What it does |
 | --- | --- |
-| Static | YAML parses, required files present, versions in step with `beszel_agent`, no `{arch}` placeholder, image names unique, `bash -n`, shellcheck, hadolint |
+| Static | YAML parses, required files present, shared app versions, bundled binary pins, no `{arch}` placeholder, unique images, shell/Dockerfile lint; Bridge formatting, Go tests/vet, and both Linux build targets |
 | Build | Builds each image on the right base, natively where possible |
-| Smoke | Runs each one: agents must reach port 45876 and stay up, hubs must answer `/api/health` |
+| Smoke | Agents reach port 45876, Hub answers `/api/health`, and Bridge liveness survives an unreachable Hub; its binary/image versions match the app manifest |
 
 The Dockerfiles carry `# hadolint ignore=DL3018` / `DL3008` directives with a comment explaining why: the Home Assistant base image tracks `:latest`, and both Alpine and Debian drop superseded package versions from their repositories, so a pinned `apk add pkg=1.2.3-r0` stops resolving the moment the base moves and the build breaks. Reproducibility comes from pinning the upstream Beszel release in each app's `beszel_version` file instead. Because those known findings are suppressed at the source, hadolint is expected to be clean and any new finding fails the run.
 
 Useful variations:
 
 ```bash
-./scripts/test-apps.sh --static           # fast, no Docker needed
+./scripts/test-apps.sh --static           # needs Go 1.26+ or Docker for Bridge checks
 ./scripts/test-apps.sh --supervisor       # add the mock Supervisor test (below)
 ./scripts/test-apps.sh beszel_hub         # just one app
 ./scripts/test-apps.sh --keep             # leave the built images behind
@@ -176,10 +176,55 @@ It exits non-zero if anything fails, and cleans up its containers, images and ne
 The smoke tests use the `BESZEL_*` environment overrides, which bypass bashio entirely. `--supervisor` covers the path real users actually take: it stands up a fake Supervisor API, points the app at it with only `SUPERVISOR_TOKEN` set, and checks that
 
 - the agent reads `hub_url`, `token` and `key` over the API, and the hub reads `app_url`
+- the Bridge reads its options and remains live while the Hub is unreachable
 - a deliberately malformed `environment_vars` name is skipped with a warning rather than killing the app (`export` rejects it, and `run.sh` runs under `set -e`)
 - the app is still running afterwards
 
 This is the phase that catches configuration-reading regressions, so run it before changing anything in `run.sh`.
+
+### Bridge entities and dashboards
+
+```bash
+./scripts/test-bridge.sh
+./scripts/test-bridge.sh --hub-version 0.20.0
+python3 scripts/test-bridge-e2e.py --build --hub-version 0.20.0
+python3 scripts/test-bridge-e2e.py --build --hub-version 0.21.0
+```
+
+The focused script verifies every schema declared in
+[`compatibility.json`](../beszel_bridge/compatibility.json), HTTP authentication,
+pagination, TLS, source freshness, optional metrics, identity and discovery
+ownership. It also compiles Linux amd64 and arm64 binaries. A pinned Docker Go
+toolchain is used when Go is absent.
+
+The end-to-end test needs Docker, Python 3 and OpenSSL. It builds the actual Hub
+app at the selected version without changing the checkout's pin, starts a real
+Agent, Mosquitto and HA Core **2026.10.1**, then verifies actual HA devices,
+entities, units, renaming/customization, stale data, HTTPS base paths/private CA,
+outages, restarts, dashboard import and cleanup. Only the disposable HA UI is
+exposed on a random loopback port. Each test uses an isolated network and private
+test accounts; credentials are not printed in reports.
+
+Without `--hub-version`, it uses the Hub version pinned in this checkout. An
+unsupported version fails before any test environment is created. Reports
+include the actual compiled Bridge app version alongside the Hub version.
+
+Use `--report .artifacts/bridge/report.json` for sanitized evidence (create the
+parent directory first). Generated reports are ignored; keep reusable API
+fixtures under `beszel_bridge/testdata/`. `--keep` preserves the
+test environment for visual review and prints its exact resource names; the HA
+login is `bridge_lab` / `bridge-lab-only-password`. Remove those named containers,
+their network and the printed temporary directory when finished (use
+`docker rm -fv` to remove their anonymous test volumes too). Without
+`--keep`, cleanup removes the owned entities and test resources automatically.
+
+These are real **HA Core container** checks, not a Supervisor installation or a
+physical remote-machine test. Complete the separate
+[Supervisor/hardware gates](BRIDGE_READINESS.md) before
+releasing the new app. The manual validation workflow runs this harness; full
+and Bridge-only publishing also gate on the repository's candidate Hub version.
+Publishing additionally requires `release_ready: true` after the manual HA OS
+acceptance checks; local test runs do not require that flag.
 
 ### End-to-end test
 

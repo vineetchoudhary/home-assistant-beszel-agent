@@ -1,0 +1,63 @@
+name: "Beszel Bridge"
+description: "Home Assistant entities and dashboards from a local or remote Beszel Hub"
+version: "0.21.0.1"
+slug: "beszel-bridge"
+url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
+stage: experimental
+homeassistant: "2026.10.1"
+init: false
+startup: application
+boot: auto
+watchdog: "http://[HOST]:8099/health"
+arch:
+  - aarch64
+  - amd64
+image: "ghcr.io/vineetchoudhary/home-assistant-beszel-bridge"
+services:
+  - mqtt:want
+map:
+  - type: ssl
+    read_only: true
+options:
+  cleanup: false
+  hub_url: null
+  hub_email: null
+  hub_password: null
+  hub_ca_file: ""
+  mqtt_source: supervisor
+  mqtt_host: ""
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  mqtt_tls: false
+  mqtt_ca_file: ""
+  include_systems: []
+  exclude_systems: []
+  metrics: []
+  poll_interval: 30
+  stale_after: 0
+  discovery_prefix: homeassistant
+  ha_status_topic: homeassistant/status
+schema:
+  cleanup: bool
+  hub_url: str
+  hub_email: email
+  hub_password: password
+  hub_ca_file: str
+  mqtt_source: list(supervisor|manual)
+  mqtt_host: str
+  mqtt_port: port
+  mqtt_username: str
+  mqtt_password: password
+  mqtt_tls: bool
+  mqtt_ca_file: str
+  include_systems:
+    - match(^[a-z0-9]{15}$)
+  exclude_systems:
+    - match(^[a-z0-9]{15}$)
+  metrics:
+    - list(cpu_usage|memory_usage|disk_usage|temperature|network_receive|network_transmit|uptime|last_sample)
+  poll_interval: int(15,300)
+  stale_after: int(0,86400)
+  discovery_prefix: match(^[A-Za-z0-9_-]+$)
+  ha_status_topic: str

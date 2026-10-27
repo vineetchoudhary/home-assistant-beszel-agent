@@ -20,6 +20,7 @@ on:
           - amd
           - nvidia
           - hub
+          - bridge
       force_rebuild:
         description: 'Force rebuild even if version is up-to-date'
         required: false
@@ -60,6 +61,7 @@ jobs:
               "beszel_agent_intel:intel" \
               "beszel_agent_smart:smart" \
               "beszel_agent_amd:amd" \
+              "beszel_bridge:bridge" \
               "beszel_hub:hub"; do
               dir="${pair%%:*}"
               id="${pair##*:}"
@@ -183,6 +185,19 @@ jobs:
             echo "Version is outdated. Proceeding with updates."
             echo "run_steps=true" >> $GITHUB_OUTPUT
           fi
+      - name: Verify Bridge compatibility before releasing
+        if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'bridge')
+        run: |
+          python3 - <<'PY'
+          import json
+          policy = json.load(open('beszel_bridge/compatibility.json'))
+          if policy.get('release_ready') is not True:
+              raise SystemExit('Bridge publishing is disabled until real HA OS/Supervisor acceptance is recorded. Complete docs/MANUAL_CHECKLIST.md and docs/BRIDGE_READINESS.md, then set release_ready to true. Full releases include the Bridge and are also blocked; individual existing-app rebuilds remain available.')
+          PY
+          chmod +x scripts/test-bridge.sh
+          ./scripts/test-bridge.sh --hub-version "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
+          python3 scripts/test-bridge-e2e.py --build --hub-version "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
+
       - name: Update app versions
         if: steps.check_version.outputs.run_steps == 'true'
         run: |
@@ -197,7 +212,9 @@ jobs:
 
           for dir in ${APP_DIRS}; do
             sed -i "s/^version:.*/version: \"${{ steps.resolve_versions.outputs.APP_VERSION }}\"/" "${dir}/config.yaml"
-            printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > "${dir}/beszel_version"
+            if [ "${dir}" != "beszel_bridge" ]; then
+              printf '%s\n' "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}" > "${dir}/beszel_version"
+            fi
             cp /tmp/CHANGELOG.md "${dir}/CHANGELOG.md"
           done
 
@@ -237,6 +254,7 @@ jobs:
           amd	beszel_agent_amd	home-assistant-beszel-agent-amd	linux/amd64,linux/arm64	alpine	agent
           nvidia	beszel_agent_nvidia	home-assistant-beszel-agent-nvidia	linux/amd64,linux/arm64	debian	agent
           hub	beszel_hub	home-assistant-beszel-hub	linux/amd64,linux/arm64	alpine	hub
+          bridge	beszel_bridge	home-assistant-beszel-bridge	linux/amd64,linux/arm64	alpine	bridge
           EOF
           echo "App table:"
           cat /tmp/apps.tsv
@@ -296,6 +314,11 @@ jobs:
             tags+=(-t "${image}:latest")
           fi
 
+          hass_type="addon"
+          if [ "$(basename "${context_dir}")" = "beszel_bridge" ]; then
+            hass_type="app"
+          fi
+
           # io.hass.arch is deliberately not set: a multi-arch build would stamp the
           # same value onto every platform. Supervisor validates the real image
           # architecture, and only reads the label informationally.
@@ -307,7 +330,7 @@ jobs:
             --build-arg "BUILD_FROM=${build_from}" \
             --build-arg "BUILD_VERSION=${version}" \
             --label "io.hass.version=${version}" \
-            --label "io.hass.type=addon" \
+            --label "io.hass.type=${hass_type}" \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --label "org.opencontainers.image.version=${version}" \
             "${tags[@]}" \
@@ -344,6 +367,28 @@ jobs:
             /tmp/build-app-image.sh "${IMAGE}" "${dir}" "${VERSION}" "${smoke_platform}" "${base}" "false" "load"
 
             case "${test_kind}" in
+              bridge)
+                options_dir="$(mktemp -d)"
+                printf '%s\n' '{"hub_url":"http://hub.invalid:8090","hub_email":"reader@example.com","hub_password":"ci-only-password","mqtt_source":"manual","mqtt_host":"broker.invalid","mqtt_port":1883,"poll_interval":30,"discovery_prefix":"homeassistant","ha_status_topic":"homeassistant/status"}' > "${options_dir}/options.json"
+                CONTAINER_ID=$(docker run -d -e BESZEL_BRIDGE_CONFIG=/test-options.json \
+                  -v "${options_dir}/options.json:/test-options.json:ro" "${IMAGE}:${VERSION}")
+                healthy=false
+                for attempt in $(seq 1 15); do
+                  if docker exec "${CONTAINER_ID}" /usr/local/bin/bridge health; then
+                    healthy=true
+                    break
+                  fi
+                  sleep 1
+                done
+                STATUS=$(docker inspect "${CONTAINER_ID}" --format='{{.State.Status}}')
+                docker logs "${CONTAINER_ID}"
+                docker rm -f "${CONTAINER_ID}" >/dev/null 2>&1 || true
+                rm -rf "${options_dir}"
+                if [ "${healthy}" != "true" ] || [ "${STATUS}" != "running" ]; then
+                  echo "Bridge must stay alive while its Hub is unavailable"
+                  exit 1
+                fi
+                ;;
               agent)
                 CONTAINER_ID=$(docker run -d \
                   -e BESZEL_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEVS7RCrzT7kxYP9+bcALqVpvX3apD8u7OOfwlGfYkXR test@github-actions" \
@@ -461,7 +506,10 @@ jobs:
           SELECTED_DIRS=""
           while IFS=$'\t' read -r id dir suffix platforms base test_kind; do
             [ -n "${id}" ] || continue
-            git add "${dir}/config.yaml" "${dir}/beszel_version" "${dir}/CHANGELOG.md"
+            git add "${dir}/config.yaml" "${dir}/CHANGELOG.md"
+            if [ "${dir}" != "beszel_bridge" ]; then
+              git add "${dir}/beszel_version"
+            fi
             SELECTED_DIRS="${SELECTED_DIRS} ${dir}"
           done <<< "$(/tmp/select-apps.sh "${IMAGE_TYPE}")"
           echo "Staged:${SELECTED_DIRS}"

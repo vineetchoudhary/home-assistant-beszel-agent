@@ -85,7 +85,10 @@ EOF
 [ -n "${APPS## }" ] || die "No beszel_* app directories found under ${REPO_ROOT}"
 
 config_version() { sed -nE 's/^version: "(.*)"$/\1/p' "$1/config.yaml"; }
-pinned_version() { tr -d '[:space:]' < "$1/beszel_version"; }
+bundles_beszel() { [ "$1" != "beszel_bridge" ]; }
+pinned_version() {
+    if bundles_beszel "$1"; then tr -d '[:space:]' < "$1/beszel_version"; else printf '%s' 'API bridge'; fi
+}
 
 # owner/repo, so the generated changelog link matches the one publish.yml builds
 # from ${{ github.repository }}. Falls back to the url: field in config.yaml.
@@ -148,7 +151,9 @@ fi
 # leave the repository with apps on two different versions.
 for app in ${APPS}; do
     [ -f "${app}/config.yaml" ]    || die "${app}: no config.yaml"
-    [ -f "${app}/beszel_version" ] || die "${app}: no beszel_version"
+    if bundles_beszel "${app}"; then
+        [ -f "${app}/beszel_version" ] || die "${app}: no beszel_version"
+    fi
     [ -n "$(config_version "${app}")" ] || die "${app}: config.yaml has no 'version: \"...\"' line"
 done
 
@@ -180,7 +185,7 @@ for app in ${APPS}; do
     changes=""
 
     [ "${old_app}" != "${APP_VERSION}" ] && changes="${changes} config.yaml ${old_app}->${APP_VERSION}"
-    if [ "${BUMP_BESZEL}" -eq 1 ] && [ "${old_pin}" != "${BESZEL_VERSION}" ]; then
+    if [ "${BUMP_BESZEL}" -eq 1 ] && bundles_beszel "${app}" && [ "${old_pin}" != "${BESZEL_VERSION}" ]; then
         changes="${changes} beszel_version ${old_pin}->${BESZEL_VERSION}"
     fi
 
@@ -199,7 +204,7 @@ for app in ${APPS}; do
     [ "$(config_version "${app}")" = "${APP_VERSION}" ] \
         || die "${app}: config.yaml still reports $(config_version "${app}")"
 
-    if [ "${BUMP_BESZEL}" -eq 1 ]; then
+    if [ "${BUMP_BESZEL}" -eq 1 ] && bundles_beszel "${app}"; then
         printf '%s\n' "${BESZEL_VERSION}" > "${app}/beszel_version" \
             || die "${app}: could not write beszel_version"
     fi
@@ -234,7 +239,7 @@ fi
 for app in ${APPS}; do
     [ "$(config_version "${app}")" = "${APP_VERSION}" ] \
         || die "${app}: version did not settle at ${APP_VERSION}"
-    if [ "${BUMP_BESZEL}" -eq 1 ]; then
+    if [ "${BUMP_BESZEL}" -eq 1 ] && bundles_beszel "${app}"; then
         [ "$(pinned_version "${app}")" = "${BESZEL_VERSION}" ] \
             || die "${app}: beszel_version did not settle at ${BESZEL_VERSION}"
     fi

@@ -4,7 +4,7 @@ Run Beszel inside Home Assistant with apps for both the Hub and the Agent. Monit
 
 ## Available Apps
 
-This repository provides six apps:
+The six existing apps are:
 
 | App | What it adds | Architectures |
 | --- | --- | --- |
@@ -14,6 +14,7 @@ This repository provides six apps:
 | **Beszel Agent (Intel GPU)** | Intel GPU metrics + S.M.A.R.T. | amd64 only |
 | **Beszel Agent (AMD GPU)** | AMD GPU metrics + S.M.A.R.T. | amd64, aarch64 |
 | **Beszel Agent (NVIDIA GPU)** | NVIDIA GPU metrics + S.M.A.R.T. - [see the caveats first](beszel_agent_nvidia/DOCS.md) | amd64, aarch64 |
+| **Beszel Bridge** | Expose Hub systems as Home Assistant devices and entities through MQTT | amd64, aarch64 |
 
 Every GPU variant bundles S.M.A.R.T. support, matching upstream Beszel - which ships smartmontools in all of its non-scratch images rather than offering separate with/without builds.
 
@@ -21,13 +22,15 @@ Every GPU variant bundles S.M.A.R.T. support, matching upstream Beszel - which s
 
 Click this button to add the repository:
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with this repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/vineetchoudhary/home-assistant-beszel-agent)
+[![Open Home Assistant and add this app repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/vineetchoudhary/home-assistant-beszel-agent)
 
 Or add it manually by following the [step-by-step installation and setup guide with screenshots](docs/INSTALLATION.md).
 
 ## Documentation
 - [Step by Step Setup and Configuration Guide with Screenshots](docs/INSTALLATION.md)
 - [Beszel Hub - Setup and Configuration](beszel_hub/DOCS.md)
+- [Beszel Bridge - HA Entities and Dashboards (Development Preview)](beszel_bridge/DOCS.md)
+- [Beszel Dashboard Templates](docs/dashboards/beszel/README.md)
 - [Beszel Agent - Setup and Configuration](beszel_agent/DOCS.md)
 - [Beszel Agent S.M.A.R.T. - Setup with S.M.A.R.T. Monitoring](beszel_agent_smart/DOCS.md)
 - [Beszel Agent Intel GPU - Setup and Configuration](beszel_agent_intel/DOCS.md)
@@ -37,6 +40,7 @@ Or add it manually by following the [step-by-step installation and setup guide w
 - [Contributing Guide](docs/CONTRIBUTING.md)
 - [Architecture Overview](docs/ARCHITECTURE.md)
 - [Release Process](docs/RELEASE.md)
+- [Manual HA OS Checks and Screenshot Checklist](docs/MANUAL_CHECKLIST.md)
 
 ## Which Version Should I Use?
 

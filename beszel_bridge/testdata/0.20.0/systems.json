@@ -1,0 +1,32 @@
+{
+  "page": 1,
+  "perPage": 100,
+  "totalPages": 1,
+  "totalItems": 1,
+  "items": [
+    {
+      "id": "sys000000000001",
+      "info": {
+        "t": 12,
+        "u": 128,
+        "cpu": 42.86,
+        "mp": 11.26,
+        "dp": 5.2,
+        "v": "0.20.0",
+        "p": false,
+        "dt": 0,
+        "os": 0,
+        "bb": 0,
+        "la": [
+          0.19,
+          0.05,
+          0.01
+        ],
+        "ct": 2
+      },
+      "name": "Example server",
+      "status": "up",
+      "updated": "2026-10-16 04:59:33.369Z"
+    }
+  ]
+}

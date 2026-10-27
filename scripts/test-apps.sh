@@ -7,7 +7,7 @@
 # adding a new beszel_* directory is picked up automatically with no edits here.
 #
 #   ./scripts/test-apps.sh                 # static checks + build + smoke test
-#   ./scripts/test-apps.sh --static        # no Docker, just the fast checks
+#   ./scripts/test-apps.sh --static        # Bridge requires Go 1.26+ or Docker
 #   ./scripts/test-apps.sh --supervisor    # also run the mock Supervisor test
 #   ./scripts/test-apps.sh beszel_hub      # only these apps
 #
@@ -33,7 +33,7 @@ usage() {
     cat <<'EOF'
 
 Options:
-  --static        Static checks only (no Docker build or run)
+  --static        Static checks only (Bridge checks use Go or a Docker toolchain)
   --no-smoke      Build images but do not run them
   --supervisor    Additionally run the mock Supervisor integration test
   --keep          Keep the built test images instead of removing them
@@ -115,6 +115,7 @@ app_base() {
 
 app_kind() {
     case "$1" in
+        beszel_bridge) echo "bridge" ;;
         beszel_hub*) echo "hub" ;;
         *)           echo "agent" ;;
     esac
@@ -159,6 +160,7 @@ CREATED_CONTAINERS=""
 CREATED_IMAGES=""
 CREATED_NETWORK=""
 TMPDIR_TEST=""
+BRIDGE_OPTIONS_DIR=""
 
 # shellcheck disable=SC2329  # invoked via the EXIT/INT/TERM trap
 cleanup() {
@@ -168,6 +170,7 @@ cleanup() {
     fi
     [ -n "${CREATED_NETWORK}" ] && docker network rm "${CREATED_NETWORK}" >/dev/null 2>&1
     [ -n "${TMPDIR_TEST}" ] && rm -rf "${TMPDIR_TEST}"
+    [ -n "${BRIDGE_OPTIONS_DIR}" ] && rm -rf "${BRIDGE_OPTIONS_DIR}"
     return 0
 }
 trap cleanup EXIT INT TERM
@@ -191,12 +194,19 @@ if [ "${DO_STATIC}" -eq 1 ]; then
 
     for app in ${APPS}; do
         ok=1
+        kind="$(app_kind "${app}")"
 
         if ! python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "${app}/config.yaml" 2>/dev/null; then
             fail "${app}: config.yaml is not valid YAML"; ok=0
         fi
 
-        for f in config.yaml Dockerfile run.sh DOCS.md CHANGELOG.md beszel_version icon.png logo.png; do
+        required_files="config.yaml Dockerfile run.sh DOCS.md CHANGELOG.md icon.png logo.png"
+        if [ "${kind}" = "bridge" ]; then
+            required_files="${required_files} compatibility.json go.mod go.sum"
+        else
+            required_files="${required_files} beszel_version"
+        fi
+        for f in ${required_files}; do
             if [ ! -f "${app}/${f}" ]; then
                 fail "${app}: missing ${f}"; ok=0
             fi
@@ -211,10 +221,14 @@ if [ "${DO_STATIC}" -eq 1 ]; then
             fail "${app}: version ${v} does not match beszel_agent ${REFERENCE_VERSION}"; ok=0
         fi
 
-        bv="$(tr -d '[:space:]' < "${app}/beszel_version")"
-        rbv="$(tr -d '[:space:]' < beszel_agent/beszel_version)"
-        if [ "${bv}" != "${rbv}" ]; then
-            fail "${app}: beszel_version ${bv} does not match beszel_agent ${rbv}"; ok=0
+        if [ "${kind}" != "bridge" ]; then
+            bv="$(tr -d '[:space:]' < "${app}/beszel_version")"
+            rbv="$(tr -d '[:space:]' < beszel_agent/beszel_version)"
+            if [ "${bv}" != "${rbv}" ]; then
+                fail "${app}: beszel_version ${bv} does not match beszel_agent ${rbv}"; ok=0
+            fi
+        elif ! ./scripts/test-bridge.sh; then
+            fail "${app}: Go/fixture/build checks failed"; ok=0
         fi
 
         if grep -q '{arch}' "${app}/config.yaml"; then
@@ -232,6 +246,7 @@ if [ "${DO_STATIC}" -eq 1 ]; then
             else
                 grep -q '__HUB_BASE__' "${app}/ingress.conf" \
                     || { fail "${app}: ingress.conf has no __HUB_BASE__ placeholder"; ok=0; }
+                # shellcheck disable=SC2013  # Placeholder matches cannot contain whitespace.
                 for ph in $(grep -oE '__[A-Z][A-Z0-9_]*__' "${app}/ingress.conf" | sort -u); do
                     grep -q "${ph}" "${app}/run.sh" \
                         || { fail "${app}: run.sh never substitutes ${ph}"; ok=0; }
@@ -328,6 +343,7 @@ if [ "${DO_BUILD}" -eq 1 ]; then
         info "${app}: ${platform} from $(basename "${base}")${note}"
         build_log="$(mktemp "${TMPDIR:-/tmp}/beszel-build-${app}.XXXXXX")" || exit 1
         if docker build --progress=plain --platform "${platform}" --build-arg "BUILD_FROM=${base}" \
+                --build-arg "BUILD_VERSION=${REFERENCE_VERSION}" \
                 -t "${image}" "${app}/" >"${build_log}" 2>&1; then
             rm -f "${build_log}"
             CREATED_IMAGES="${CREATED_IMAGES} ${image}"
@@ -360,6 +376,15 @@ if [ "${DO_SMOKE}" -eq 1 ]; then
             port="$(free_port "${port}")"
             docker run -d --name "${cname}" --platform "${platform}" \
                 -p "${port}:8090" "${image}" >/dev/null 2>&1
+        elif [ "${kind}" = "bridge" ]; then
+            BRIDGE_OPTIONS_DIR="$(mktemp -d)"
+            cat > "${BRIDGE_OPTIONS_DIR}/options.json" <<'BRIDGEJSON'
+{"hub_url":"http://hub.invalid:8090","hub_email":"reader@example.com","hub_password":"test-password","mqtt_source":"manual","mqtt_host":"broker.invalid","mqtt_port":1883,"poll_interval":30,"stale_after":180,"discovery_prefix":"homeassistant","ha_status_topic":"homeassistant/status"}
+BRIDGEJSON
+            docker run -d --name "${cname}" --platform "${platform}" \
+                -e BESZEL_BRIDGE_CONFIG=/test-options.json \
+                -v "${BRIDGE_OPTIONS_DIR}/options.json:/test-options.json:ro" \
+                "${image}" >/dev/null 2>&1
         else
             docker run -d --name "${cname}" --platform "${platform}" \
                 -e BESZEL_KEY="${TEST_KEY}" \
@@ -393,6 +418,20 @@ if [ "${DO_SMOKE}" -eq 1 ]; then
                         || { fail "${app}: Ingress did not rewrite asset paths"; ok=0; }
                 fi
             fi
+        elif [ "${kind}" = "bridge" ]; then
+            healthy=0
+            for _ in $(seq 1 15); do
+                if docker exec "${cname}" /usr/local/bin/bridge health >/dev/null 2>&1; then
+                    healthy=1; break
+                fi
+                sleep 1
+            done
+            [ "${healthy}" -eq 1 ] || { fail "${app}: liveness failed during Hub outage"; ok=0; }
+            bridge_version="$(docker exec "${cname}" /usr/local/bin/bridge version 2>/dev/null)"
+            bridge_label="$(docker image inspect "${image}" --format '{{index .Config.Labels "io.hass.version"}}')"
+            if [ "${bridge_version}" != "${REFERENCE_VERSION}" ] || [ "${bridge_label}" != "${REFERENCE_VERSION}" ]; then
+                fail "${app}: binary/image metadata does not match app version ${REFERENCE_VERSION}"; ok=0
+            fi
         else
             sleep 8
         fi
@@ -402,6 +441,8 @@ if [ "${DO_SMOKE}" -eq 1 ]; then
 
         if [ "${kind}" = "hub" ]; then
             echo "${logs}" | grep -q "Starting Beszel Hub" || { fail "${app}: hub did not start"; ok=0; }
+        elif [ "${kind}" = "bridge" ]; then
+            echo "${logs}" | grep -q "Starting Beszel Bridge" || { fail "${app}: Bridge did not start"; ok=0; }
         else
             echo "${logs}" | grep -q "Starting Beszel Agent" || { fail "${app}: agent did not start"; ok=0; }
             echo "${logs}" | grep -q "Starting Beszel Agent on port 45876" || { fail "${app}: agent never reached its listen port"; ok=0; }
@@ -457,6 +498,13 @@ HUB = {
         {"name": "BAD NAME", "value": "must-be-skipped"},
     ],
 }
+BRIDGE = {
+    "hub_url": "http://hub.invalid:8090",
+    "hub_email": "reader@example.com",
+    "hub_password": "mock-bridge-password",
+    "mqtt_source": "supervisor",
+    "poll_interval": 30,
+}
 INFO = {"watchdog": True, "state": "started"}
 
 class H(BaseHTTPRequestHandler):
@@ -469,7 +517,10 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
     def do_GET(self):
         if self.path == "/addons/self/options/config":
-            self._send({"result": "ok", "data": HUB if os.environ.get("MODE") == "hub" else AGENT})
+            options = {"hub": HUB, "bridge": BRIDGE}.get(os.environ.get("MODE"), AGENT)
+            self._send({"result": "ok", "data": options})
+        elif self.path == "/services/mqtt":
+            self._send({"result": "ok", "data": {"host": "broker.invalid", "port": 1883, "username": "bridge", "password": "mock-mqtt-password", "ssl": False}})
         elif self.path == "/addons/self/info":
             self._send({"result": "ok", "data": INFO})
         else:
@@ -540,6 +591,13 @@ PROCENV
                 then
                     fail "${app}: trusted auth header is not restricted to the loopback proxy"; ok=0
                 fi
+            elif [ "${kind}" = "bridge" ]; then
+                docker exec "${cname}" jq -e \
+                    '.hub_url == "http://hub.invalid:8090" and .mqtt_source == "supervisor"' \
+                    /data/options.json >/dev/null 2>&1 \
+                    || { fail "${app}: Bridge options were not read from the Supervisor"; ok=0; }
+                docker exec "${cname}" /usr/local/bin/bridge health >/dev/null 2>&1 \
+                    || { fail "${app}: Bridge liveness failed while its Hub was unavailable"; ok=0; }
             else
                 echo "${logs}" | grep -q "Hub URL: http://hub.invalid:8090" \
                     || { fail "${app}: hub_url was not read from the Supervisor API"; ok=0; }
@@ -549,13 +607,15 @@ PROCENV
 
             # A malformed name must be skipped with a warning, never abort the
             # app - `export` fails on it and run.sh runs under `set -e`.
-            echo "${logs}" | grep -q "is not a valid variable name" \
-                || { fail "${app}: malformed environment_vars name was not rejected"; ok=0; }
+            if [ "${kind}" != "bridge" ]; then
+                echo "${logs}" | grep -q "is not a valid variable name" \
+                    || { fail "${app}: malformed environment_vars name was not rejected"; ok=0; }
+            fi
             [ "${status}" = "running" ] \
                 || { fail "${app}: container is ${status:-gone} after reading options"; ok=0; }
 
             if [ "${ok}" -eq 1 ]; then
-                pass "${app}: reads options via bashio, survives a bad env var name"
+                pass "${app}: reads Supervisor options and stays running"
                 record "${app}" supervisor ok
             else
                 echo "${logs}" | tail -15 | sed 's/^/        /'

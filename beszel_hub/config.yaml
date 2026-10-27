@@ -1,6 +1,6 @@
 name: "Beszel Hub"
-description: "Beszel Hub Add-on"
-version: "0.21.0"
+description: "Beszel Hub App"
+version: "0.21.0.1"
 slug: "beszel-hub"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
 init: false
@@ -19,7 +19,7 @@ arch:
 ports:
   8090/tcp: 8090
 ports_description:
-  8090/tcp: "Beszel Hub web UI and API. Also used by the Home Assistant watchdog; if you clear this port the watchdog cannot reach the add-on."
+  8090/tcp: "Beszel Hub web UI and API. Also used by the Home Assistant watchdog; if you clear this port the watchdog cannot reach the app."
 image: "ghcr.io/vineetchoudhary/home-assistant-beszel-hub"
 options:
   app_url: ""

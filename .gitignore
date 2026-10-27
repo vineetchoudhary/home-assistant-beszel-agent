@@ -1,1 +1,5 @@
 .DS_Store
+
+# Disposable Bridge test reports and capture intermediates.
+/.artifacts/bridge/
+/docs/bridge-evidence/

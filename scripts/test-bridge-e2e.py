@@ -1,0 +1,342 @@
+#!/usr/bin/env python3
+"""Isolated real Hub/Agent -> Bridge -> Mosquitto -> Home Assistant test.
+
+Uses disposable containers and loopback-only published ports. Production HA
+and Supervisor installations are never contacted. Run with Docker available.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import secrets
+import shutil
+import subprocess
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+ROOT = Path(__file__).resolve().parent.parent
+HA_IMAGE = "ghcr.io/home-assistant/home-assistant:2026.10.1"
+PROXY = '''import http.server,json,pathlib,ssl,urllib.request,urllib.error
+class Proxy(http.server.BaseHTTPRequestHandler):
+    def handle_request(self):
+        if not self.path.startswith('/beszel/'):
+            self.send_error(404); return
+        headers={k:v for k,v in self.headers.items() if k.lower() not in ('host','content-length','connection')}
+        body=self.rfile.read(int(self.headers.get('Content-Length',0))) if self.command=='POST' else None
+        req=urllib.request.Request('http://hub:8090/'+self.path.removeprefix('/beszel/'),data=body,headers=headers,method=self.command)
+        try:
+            upstream=urllib.request.urlopen(req,timeout=15)
+        except urllib.error.HTTPError as error:
+            upstream=error
+        data=upstream.read()
+        fault=pathlib.Path('/lab/proxy-fault.json')
+        if '/system_stats/records' in self.path and fault.exists() and json.loads(fault.read_text()).get('stale'):
+            response=json.loads(data)
+            for sample in response.get('items',[]): sample['created']='2000-01-01 00:00:00.000Z'
+            data=json.dumps(response).encode()
+        self.send_response(upstream.status)
+        self.send_header('Content-Type','application/json')
+        self.send_header('Content-Length',str(len(data)))
+        self.end_headers(); self.wfile.write(data)
+    do_GET=handle_request
+    do_POST=handle_request
+    def log_message(self,*args): pass
+server=http.server.ThreadingHTTPServer(('0.0.0.0',8443),Proxy)
+ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain('/lab/proxy.crt','/lab/proxy.key')
+server.socket=ctx.wrap_socket(server.socket,server_side=True)
+server.serve_forever()
+'''
+
+
+class Lab:
+    def __init__(self, args):
+        self.args = args
+        self.directory = Path(tempfile.mkdtemp(prefix="beszel-bridge-e2e-"))
+        self.tag = f"beszel-bridge-e2e-{os.getpid()}-{secrets.token_hex(3)}"
+        self.containers = []
+        self.network_created = False
+        self.checks = []
+        self.ha_url = ""
+
+    def build(self):
+        import re
+        app_version = re.search(r'^version: "([^"]+)"', (ROOT / "beszel_bridge/config.yaml").read_text(), re.M).group(1)
+        hub_source = self.directory / "hub-source"
+        shutil.copytree(ROOT / "beszel_hub", hub_source)
+        (hub_source / "beszel_version").write_text(self.args.hub_version + "\n")
+        for name, image, source in [("bridge", self.args.image, ROOT / "beszel_bridge"), ("hub", self.args.hub_image, hub_source)]:
+            log = self.directory / (name + "-build.log")
+            with log.open("w") as output:
+                result = subprocess.run(["docker", "build", "--progress=plain", "--build-arg", "BUILD_FROM=ghcr.io/home-assistant/base:latest", "--build-arg", "BUILD_VERSION=" + app_version, "-t", image, str(source)], stdout=output, stderr=subprocess.STDOUT)
+            if result.returncode:
+                descriptor, preserved_name = tempfile.mkstemp(prefix="beszel-bridge-failed-build-", suffix=".log")
+                os.close(descriptor)
+                preserved = Path(preserved_name)
+                shutil.copyfile(log, preserved)
+                raise RuntimeError(f"{name} image build failed; complete log saved to {preserved}")
+            print("PASS built " + name + " image", flush=True)
+
+    def docker(self, *args, input=None):
+        # Capture output so errors never print test account tokens or options.
+        result = subprocess.run(["docker", *map(str, args)], input=input, text=True, capture_output=True)
+        if result.returncode:
+            raise RuntimeError(f"Docker {args[0]} failed: {result.stderr[-1800:]}")
+        return result.stdout.strip()
+
+    def start(self, suffix, image, *options):
+        name = self.tag + "-" + suffix
+        self.containers.append(name)
+        self.docker("run", "-d", "--name", name, "--network", self.tag, *options, image)
+        return name
+
+    def port(self, container, internal):
+        return self.docker("port", container, internal).rsplit(":", 1)[1]
+
+    def request(self, base, path, payload=None, token=None, method=None, form=False):
+        headers = {}
+        if token:
+            headers["Authorization"] = "Bearer " + token if base == self.ha_url else token
+        data = None
+        if payload is not None:
+            data = urllib.parse.urlencode(payload).encode() if form else json.dumps(payload).encode()
+            headers["Content-Type"] = "application/x-www-form-urlencoded" if form else "application/json"
+        request = urllib.request.Request(base + path, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.load(response)
+
+    def wait(self, title, condition, timeout=90):
+        deadline = time.monotonic() + timeout
+        last_error = "condition not satisfied"
+        while time.monotonic() < deadline:
+            try:
+                result = condition()
+                if result:
+                    self.checks.append(title)
+                    print("PASS " + title, flush=True)
+                    return result
+            except Exception as error:
+                # Do not print HTTP response bodies or auth-bearing commands.
+                last_error = type(error).__name__
+            time.sleep(2)
+        raise RuntimeError(title + " timed out (" + last_error + ")")
+
+    def snapshot(self, dashboard=False, customize=False):
+        args = ["exec", self.ha, "python", "/repo/scripts/bridge-ha-verify.py"]
+        if dashboard:
+            args.append("--dashboard")
+        if customize:
+            args.append("--customize")
+        return json.loads(self.docker(*args))
+
+    def entity(self, key):
+        snapshot = self.snapshot()
+        unique_id = self.namespace + "_" + self.system_id + "_" + key
+        entity = next((entity for entity in snapshot["entities"] if entity["unique_id"] == unique_id), None)
+        return snapshot["states"].get(entity["entity_id"]) if entity else None
+
+    def metric_ready(self):
+        state = self.entity("cpu_usage")
+        return state and state["state"] not in ("unknown", "unavailable")
+
+    def metric_unavailable(self):
+        state = self.entity("cpu_usage")
+        return state and state["state"] == "unavailable"
+
+    def start_bridge(self):
+        self.bridge = self.start("bridge", self.args.image, "-v", f"{self.bridge_dir}:/data", "-v", f"{self.directory}:/ssl:ro")
+
+    def stop_bridge(self):
+        self.docker("rm", "-fv", self.bridge)
+        self.containers.remove(self.bridge)
+
+    def save_options(self):
+        target = self.bridge_dir / "options.json"
+        target.write_text(json.dumps(self.options))
+        target.chmod(0o600)
+
+    def prepare(self):
+        self.docker("network", "create", self.tag)
+        self.network_created = True
+        self.ha_url = ""
+        self.bridge_dir = self.directory / "bridge"
+        self.ha_dir = self.directory / "ha"
+        self.bridge_dir.mkdir()
+        self.ha_dir.mkdir()
+        (self.directory / "mosquitto.conf").write_text("listener 1883 0.0.0.0\nallow_anonymous true\npersistence true\npersistence_location /mosquitto/data/\n")
+        self.broker = self.start("broker", "eclipse-mosquitto:2.0.22", "--network-alias", "broker", "-v", f"{self.directory / 'mosquitto.conf'}:/mosquitto/config/mosquitto.conf:ro")
+        password = secrets.token_urlsafe(24)
+        self.hub = self.start("hub", self.args.hub_image, "--network-alias", "hub", "-e", "BESZEL_HUB_USER_EMAIL=admin@example.test", "-e", "BESZEL_HUB_USER_PASSWORD=" + password)
+        # Hub port 8090 is deliberately not published. A temporary client uses
+        # the same internal DNS/port a Bridge app would use inside HA.
+        self.client = self.tag + "-client"
+        self.docker("run", "-d", "--name", self.client, "--network", self.tag, "--entrypoint", "sleep", "-v", f"{self.directory}:/lab", "-v", f"{ROOT}:/repo:ro", HA_IMAGE, "infinity")
+        self.containers.append(self.client)
+        # Expose a test-only API client over the Docker CLI; no Hub host port.
+        client_script = '''import json,sys,urllib.request
+data=json.load(sys.stdin)
+headers={'Content-Type':'application/json'}
+if data.get('token'): headers['Authorization']=data['token']
+body=json.dumps(data['payload']).encode() if data.get('payload') is not None else None
+r=urllib.request.Request('http://hub:8090'+data['path'],data=body,headers=headers,method=data.get('method'))
+with urllib.request.urlopen(r,timeout=15) as response: print(response.read().decode())
+'''
+        (self.directory / "hub-client.py").write_text(client_script)
+
+        def api(path, payload=None, token=None, method=None):
+            return json.loads(self.docker("exec", "-i", self.client, "python", "/lab/hub-client.py", input=json.dumps({"path": path, "payload": payload, "token": token, "method": method})))
+
+        self.hub_api = api
+        self.wait("local Hub API reachable without a published host port", lambda: api("/api/health"))
+        auth = api("/api/collections/users/auth-with-password", {"identity": "admin@example.test", "password": password})
+        self.admin_token = auth["token"]
+        info = api("/api/beszel/info", token=self.admin_token)
+        registration = api("/api/beszel/universal-token?enable=1", token=self.admin_token)["token"]
+        self.agent = self.start("agent", f"henrygd/beszel-agent:{self.args.hub_version}", "--hostname", "bridge-test-server", "-e", "KEY=" + info["key"], "-e", "TOKEN=" + registration, "-e", "HUB_URL=http://hub:8090")
+        system = self.wait("real Agent reports metrics to Hub", lambda: next((row for row in api("/api/collections/systems/records", token=self.admin_token)["items"] if row["status"] == "up"), None))
+        self.system_id = system["id"]
+        super_token = api("/api/collections/_superusers/auth-with-password", {"identity": "admin@example.test", "password": password})["token"]
+        reader_password = secrets.token_urlsafe(24)
+        reader = api("/api/collections/users/records", {"email": "reader@example.test", "password": reader_password, "passwordConfirm": reader_password, "role": "readonly", "verified": True}, super_token)
+        api("/api/collections/systems/records/" + self.system_id, {"users": [auth["record"]["id"], reader["id"]]}, super_token, "PATCH")
+        self.options = {"hub_url": "http://hub:8090", "hub_email": "reader@example.test", "hub_password": reader_password,
+                        "mqtt_source": "manual", "mqtt_host": "broker", "mqtt_port": 1883,
+                        "poll_interval": 15, "stale_after": 180, "discovery_prefix": "homeassistant", "ha_status_topic": "homeassistant/status"}
+        self.save_options()
+        self.start_bridge()
+        self.wait("Bridge persists stable Hub identity", lambda: (self.bridge_dir / "bridge-state.json").exists())
+        self.namespace = json.loads((self.bridge_dir / "bridge-state.json").read_text())["namespace"]
+
+    def setup_ha(self):
+        # A full Core instance exercises its built-in MQTT integration and UI.
+        (self.ha_dir / "configuration.yaml").write_text("default_config:\nhomeassistant:\n  name: Beszel Bridge Lab\n  time_zone: UTC\n  country: US\n  latitude: 0\n  longitude: 0\n  elevation: 0\n  unit_system: metric\n")
+        self.ha = self.start("ha", HA_IMAGE, "--network-alias", "ha", "-p", "127.0.0.1::8123", "-v", f"{self.ha_dir}:/config", "-v", f"{ROOT}:/repo:ro")
+        self.ha_url = "http://127.0.0.1:" + self.port(self.ha, "8123/tcp")
+        self.wait("Home Assistant onboarding available", lambda: self.request(self.ha_url, "/api/onboarding"), timeout=240)
+        self.client_id = self.ha_url + "/"
+        response = self.request(self.ha_url, "/api/onboarding/users", {"client_id": self.client_id, "name": "Bridge Lab", "username": "bridge_lab", "password": "bridge-lab-only-password", "language": "en"})
+        auth = self.request(self.ha_url, "/auth/token", {"grant_type": "authorization_code", "code": response["auth_code"], "client_id": self.client_id}, form=True)
+        self.ha_token = auth["access_token"]
+        token_file = self.ha_dir / "bridge-test-auth.json"
+        token_file.write_text(json.dumps({"access_token": self.ha_token, "namespace": self.namespace, "system_id": self.system_id, "hub_browser_url": "https://monitoring.example.com"}))
+        token_file.chmod(0o600)
+        for path, payload in [("/api/onboarding/core_config", {}), ("/api/onboarding/analytics", {}), ("/api/onboarding/integration", {"client_id": self.client_id, "redirect_uri": self.client_id})]:
+            self.request(self.ha_url, path, payload, self.ha_token)
+        flow = self.request(self.ha_url, "/api/config/config_entries/flow", {"handler": "mqtt", "show_advanced_options": False}, self.ha_token)
+        result = self.request(self.ha_url, "/api/config/config_entries/flow/" + flow["flow_id"],
+                              {"broker": "broker", "port": 1883, "protocol": "5", "other_settings": {"set_ca_cert": "off", "set_client_cert": False, "transport": "tcp"}}, self.ha_token)
+        assert result["type"] == "create_entry", "MQTT config flow did not complete: " + str(result.get("errors"))
+        self.wait("HA creates real MQTT metric entities", self.metric_ready)
+
+    def exercise(self):
+        baseline = self.snapshot(customize=True)
+        identities = {entity["unique_id"]: entity["entity_id"] for entity in baseline["entities"]}
+        assert len(baseline["devices"]) == 2, "Expected Bridge and monitored server devices"
+        assert self.entity("cpu_usage")["attributes"]["unit_of_measurement"] == "%"
+        assert not any(entity["unique_id"].endswith("_temperature") for entity in baseline["entities"]), "invented temperature without a source sensor"
+        self.checks.append("device grouping, units, and absent sensor capability")
+        # Rename in the actual Hub; stable IDs and HA customizations must survive.
+        self.hub_api("/api/collections/systems/records/" + self.system_id, {"name": "Renamed lab server"}, self.admin_token, "PATCH")
+        self.wait("server rename updates device name", lambda: any(device["name"] == "Renamed lab server" for device in self.snapshot()["devices"]))
+        assert identities == {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        self.checks.append("server rename preserves entity identities")
+        assert self.entity("cpu_usage")["attributes"]["friendly_name"] == "My lab CPU"
+        self.checks.append("HA entity ID and name customization survive rediscovery")
+        # HTTPS reverse proxy with a base path represents a remote Hub endpoint.
+        config = "[req]\ndistinguished_name=dn\nx509_extensions=extensions\nprompt=no\n[dn]\nCN=proxy\n[extensions]\nsubjectAltName=DNS:proxy,IP:127.0.0.1\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,digitalSignature,keyEncipherment,keyCertSign\n"
+        (self.directory / "openssl.cnf").write_text(config)
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-config", str(self.directory / "openssl.cnf"), "-keyout", str(self.directory / "proxy.key"), "-out", str(self.directory / "proxy.crt")], check=True, capture_output=True)
+        (self.directory / "proxy.py").write_text(PROXY)
+        self.proxy = self.tag + "-proxy"
+        self.docker("run", "-d", "--name", self.proxy, "--network", self.tag, "--network-alias", "proxy", "--entrypoint", "python", "-v", f"{self.directory}:/lab:ro", HA_IMAGE, "/lab/proxy.py")
+        self.containers.append(self.proxy)
+        self.stop_bridge()
+        self.options.update(hub_url="https://proxy:8443/beszel", hub_ca_file="/ssl/proxy.crt")
+        self.save_options()
+        self.start_bridge()
+        self.wait("remote HTTPS base-path Hub with private CA", self.metric_ready)
+        # Require a new successful sync after restart, not a restored HA value.
+        self.wait("remote Hub performs a successful sync", lambda: '"hub_connected":true' in self.docker("exec", self.bridge, "/usr/local/bin/bridge", "status").replace(" ", ""))
+        assert identities == {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        assert self.entity("cpu_usage")["attributes"]["friendly_name"] == "My lab CPU"
+        self.checks.append("Hub address change and Bridge restart preserve identity")
+        self.docker("stop", self.proxy)
+        self.wait("Hub outage marks real HA metrics unavailable", self.metric_unavailable)
+        self.docker("exec", self.bridge, "/usr/local/bin/bridge", "health")
+        self.checks.append("Bridge liveness stays healthy during Hub outage")
+        self.docker("start", self.proxy)
+        self.wait("Hub recovery restores existing entities", self.metric_ready)
+        (self.directory / "proxy-fault.json").write_text(json.dumps({"stale": True}))
+        self.wait("old source sample expires despite successful polls", self.metric_unavailable)
+        (self.directory / "proxy-fault.json").unlink()
+        self.wait("fresh source sample restores telemetry", self.metric_ready)
+        before = json.loads(self.docker("exec", self.bridge, "/usr/local/bin/bridge", "status"))["last_sync"]
+        self.docker("restart", self.broker)
+        def reconnected():
+            status = json.loads(self.docker("exec", self.bridge, "/usr/local/bin/bridge", "status"))
+            return status.get("mqtt_connected") and status.get("last_sync") != before and self.metric_ready()
+        self.wait("broker restart recovers entity state", reconnected, timeout=120)
+        self.docker("restart", self.ha)
+        self.ha_url = "http://127.0.0.1:" + self.port(self.ha, "8123/tcp")
+        self.wait("HA restart rediscovers existing entities", self.metric_ready, timeout=180)
+        assert identities == {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        self.snapshot(dashboard=True)
+        self.checks.append("both standard-card dashboard templates imported with actual entity IDs")
+        if not self.args.keep:
+            self.stop_bridge()
+            self.options["cleanup"] = True
+            self.save_options()
+            self.start_bridge()
+            self.wait("cleanup removes owned HA entities", lambda: len(self.snapshot()["entities"]) == 0)
+
+    def close(self):
+        if self.args.keep:
+            print(json.dumps({"ha_url": self.ha_url, "dashboard": self.ha_url + "/beszel-bridge-lab/servers", "directory": str(self.directory), "network": self.tag, "containers": self.containers}, indent=2), flush=True)
+            return
+        for container in reversed(self.containers):
+            subprocess.run(["docker", "rm", "-fv", container], capture_output=True)
+        if self.network_created:
+            subprocess.run(["docker", "network", "rm", self.tag], capture_output=True)
+        shutil.rmtree(self.directory)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--image", default="beszel-bridge-dev:local")
+    parser.add_argument("--hub-image", default="beszel-bridge-hub-dev:local")
+    parser.add_argument("--hub-version", default=(ROOT / "beszel_hub/beszel_version").read_text().strip())
+    parser.add_argument("--keep", action="store_true")
+    parser.add_argument("--build", action="store_true", help="Build the Bridge and a Hub app pinned to --hub-version first")
+    parser.add_argument("--report", type=Path)
+    args = parser.parse_args()
+    policy = json.loads((ROOT / "beszel_bridge/compatibility.json").read_text())
+    if args.hub_version not in policy["hub_versions"]:
+        parser.error("Hub version has no verified Bridge compatibility fixtures: " + args.hub_version)
+    lab = Lab(args)
+    try:
+        if args.build:
+            lab.build()
+        lab.prepare()
+        lab.setup_ha()
+        lab.exercise()
+        report = {"app_version": lab.docker("run", "--rm", "--entrypoint", "/usr/local/bin/bridge", args.image, "version"),
+                  "hub_version": args.hub_version, "ha_image": HA_IMAGE,
+                  "tested_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                  "bridge_image_id": lab.docker("image", "inspect", args.image, "--format", "{{.Id}}"),
+                  "bridge_architecture": lab.docker("image", "inspect", args.image, "--format", "{{.Architecture}}"),
+                  "hub_image_id": lab.docker("image", "inspect", args.hub_image, "--format", "{{.Id}}"),
+                  "checks": lab.checks,
+                  "supervisor_validated": False, "remote_machine": "isolated HTTPS proxy topology; physical remote deployment not tested"}
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(json.dumps(report, indent=2) + "\n")
+        print(f"PASS {len(lab.checks)} real-stack checks", flush=True)
+    finally:
+        lab.close()
+
+
+if __name__ == "__main__":
+    main()
