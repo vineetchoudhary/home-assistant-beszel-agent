@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.21.0.1 — development preview
+## 0.21.0.1 (development preview)
 
 - Add Home Assistant entities through MQTT discovery from a Hub on Home Assistant or another machine.
 - Add server overview/detail dashboard templates.

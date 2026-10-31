@@ -1,124 +1,130 @@
-# Beszel Hub for Home Assistant
+# Beszel Hub
 
-Run the Beszel Hub directly inside Home Assistant. This app hosts the Beszel web UI and API so smaller setups do not need a separate Docker or Kubernetes deployment for the hub.
+Run the Beszel web UI, API and database inside Home Assistant. The Hub stores readings from Agents on this host or other machines. Supports **amd64 and aarch64**.
 
-## What this app does
+## Setup
 
-- Hosts the Beszel web UI and API on port `8090`
-- Persists the hub database, SSH keys, and other runtime data in the app data directory
-- Can sign Ingress visitors in automatically, without weakening the password on port `8090`
-- Supports optional `APP_URL` configuration and additional Beszel Hub environment variables
+1. Add this repository and install **Beszel Hub** from the Home Assistant app store. The [installation guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) includes screenshots.
+2. Open **Configuration** and set `app_url` to the Hub address that your Agents and notification recipients can reach, for example `http://192.168.1.100:8090`. Leave `environment_vars` empty unless you need an advanced setting.
+3. Save and start the app. Open `http://<home-assistant-host>:8090` and create the first admin account when prompted.
+4. In the Hub, choose **Add System**. Configure each Agent with the Hub's reachable URL, public key and token, then confirm live readings.
+5. Use **Open Web UI** or add Beszel to the Home Assistant sidebar for Ingress access. Set up `ingress_user` below if you want automatic login through that panel.
+
+Save and restart the app after configuration changes. Agents connect to the direct Hub API, so give them its own URL rather than a Home Assistant or Ingress URL.
 
 ## Configuration
 
-### `app_url` (optional)
+Every option available in the app configuration is listed below. This example uses normal password login:
 
-The public URL of this hub. Beszel uses it to build the links it puts in alert and notification emails, so set it if you use notifications - not only when you are behind a reverse proxy.
+```yaml
+app_url: "http://192.168.1.100:8090"
+environment_vars: []
+```
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `app_url` | `""` | The Hub's reachable HTTP or HTTPS URL. Used for notification links and Agent commands generated in the web UI. A URL path also sets the Hub's base path. |
+| `ingress_user` | Unset | Optional email address of an existing Beszel account. Automatically signs Ingress visitors in as that account. Omit for normal login. |
+| `environment_vars` | `[]` | Optional list of supported Beszel Hub environment variables. Each entry requires `name` and `value`. |
+
+### `app_url`
+
+Set this when you use notifications, a reverse proxy or Ingress. When left empty, the Hub uses its default URL behavior. Ingress can otherwise cause the **Add System** dialog to generate commands using the Home Assistant address, which Agents cannot use as a Hub API URL.
 
 ```yaml
 app_url: "https://beszel.example.com"
 ```
 
-**If the URL contains a path, that path becomes the hub's base path.** Setting `app_url: "https://example.com/beszel"` makes the hub serve its assets under `/beszel/`, and `http://<home-assistant-host>:8090/` will no longer load - you would have to browse to `http://<home-assistant-host>:8090/beszel/` instead. Only use a path when the hub really is served from a subpath.
+**A path in this URL becomes the Hub's base path.** For example, `https://example.com/beszel` makes direct access use `http://<home-assistant-host>:8090/beszel/` rather than the root URL. Include that path in Agent and Bridge URLs too. Only set a path if your Hub is actually served from that subpath.
 
-Leave it empty for plain direct access on `http://<home-assistant-host>:8090`.
+If you supply `APP_URL` or `BESZEL_HUB_APP_URL` through `environment_vars`, that environment setting overrides the `app_url` option. Prefer one place for this setting.
 
-### `ingress_user` (optional)
+### `ingress_user`
 
-Signs visitors who arrive through Ingress in as this Beszel account, so the sidebar panel stops asking for a password.
+Create the account in the Hub first, then add its email address in **Configuration**. You can use the YAML editor if the optional field is not shown:
 
 ```yaml
+app_url: "http://192.168.1.100:8090"
 ingress_user: "you@example.com"
+environment_vars: []
 ```
 
-Home Assistant has already authenticated anyone who reaches the Ingress panel, so the app forwards that instead of asking a second time: the built-in nginx proxy tags each Ingress request with the account name, and the hub is configured to trust that tag only when it comes from that proxy. **Direct access on `http://<home-assistant-host>:8090` is unaffected and still asks for a password**, and so is a reverse proxy of your own in front of that port - neither goes through the Ingress proxy, so neither is trusted.
+Save, restart and reopen the Beszel panel. To restore normal login, remove `ingress_user` or clear its field, then save and restart. Unknown or invalid addresses fall back to the login screen.
 
-The address must belong to an account that already exists in the hub, so create it in the web UI first. An address that matches no account is ignored and the normal login screen comes back, as is one that is not a valid email address.
+**Anyone who can open the Ingress panel receives this account's access.** Treat the boundary as any logged-in Home Assistant user. A `readonly` account is useful for shared viewing. Use your admin account through the direct Hub URL when you need to make changes.
 
-**Who this lets in:** anyone who can open the Ingress panel. `panel_admin` defaults to `true`, so the sidebar entry is meant for administrators, but treat the boundary as "any logged-in Home Assistant user" rather than relying on it being administrators only. If that is wider than you want, point `ingress_user` at an account whose role is `readonly` and sign in as your admin account from port `8090` when you need to change something.
+The internal Ingress proxy supplies a trusted authentication header that the Hub accepts only from its local proxy. Direct access on port `8090` and your own reverse proxies still require authentication unless you separately enable `AUTO_LOGIN`.
 
-See [Staying logged in](#staying-logged-in) for the setup steps.
+### `environment_vars`
 
-### `environment_vars` (optional)
+Use this list for supported [Beszel Hub environment variables](https://www.beszel.dev/guide/environment-variables). Merge all entries into one list rather than repeating the `environment_vars` key.
 
-Pass extra Beszel Hub environment variables when you need advanced features such as OAuth or trusted auth headers.
+| Entry field | Requirement |
+| --- | --- |
+| `name` | A nonempty variable name matching `[A-Za-z_][A-Za-z0-9_]*`, such as `SHARE_ALL_SYSTEMS`. |
+| `value` | A nonempty string. Quote numbers and booleans, such as `"30"` and `"true"`. |
 
 ```yaml
 environment_vars:
-  - name: "SHARE_ALL_SYSTEMS"
+  - name: SHARE_ALL_SYSTEMS
     value: "true"
 ```
 
-See the upstream Beszel environment variable reference for supported Hub options: https://www.beszel.dev/guide/environment-variables
+`SHARE_ALL_SYSTEMS` makes systems visible to all users, so add it only if that is your intended sharing policy. Variable names accept the `BESZEL_HUB_` prefix. The prefixed form takes precedence if both forms are set. Empty fields and invalid names are skipped with a warning.
 
-Names may be given with or without Beszel's `BESZEL_HUB_` prefix; the prefixed form wins if you set both.
+Values are stored in plain text in app options and may be included in Home Assistant backups. Keep credentials private when sharing configuration or logs.
 
-> **Values are stored in plain text** in the app options and are included in Home Assistant backups. Avoid putting long-lived secrets here where you can.
+### Creating the first user with environment variables
 
-### Creating the first user
-
-On its very first start - and only then - the hub reads `USER_EMAIL` and `USER_PASSWORD` to create the initial admin account:
+The browser setup is the simplest way to create the first account. For an unattended first start, set both variables before the Hub initializes its database:
 
 ```yaml
 environment_vars:
-  - name: "USER_EMAIL"
+  - name: USER_EMAIL
     value: "admin@example.com"
-  - name: "USER_PASSWORD"
-    value: "change-me"
+  - name: USER_PASSWORD
+    value: "replace-with-a-strong-password"
 ```
 
-These are read by a one-time database migration, so **adding them later has no effect** - once the database exists, change credentials from the web UI instead. If you leave them unset, the hub starts with no usable account and prompts you to create the first user in the browser, which is the simpler route.
+These variables are read by the first-run migration. Adding or changing them after initialization does not create another account or reset a password. Manage existing accounts in the Hub. Remove the password entry from app options after initialization if it is no longer needed.
 
-## Staying logged in
+## Automatic login on every access path
 
-Beszel sessions expire after a few days and the hub asks you to log in again. Two options avoid that.
+`ingress_user` limits automatic login to the Home Assistant panel. The upstream `AUTO_LOGIN` environment variable instead signs **every request** in as the chosen account, including direct access on published port `8090` and access through your reverse proxy:
 
-### Auto-login through Ingress
+```yaml
+environment_vars:
+  - name: AUTO_LOGIN
+    value: "you@example.com"
+```
 
-Signs you in on the sidebar panel only. Port `8090` keeps its password.
+The account must already exist. Save and restart to apply the setting, or remove the entry and restart to restore authentication. `AUTO_LOGIN` takes precedence over `ingress_user`, and setting both produces a startup warning.
 
-1. Create the account in the hub's web UI if it does not exist yet.
-2. Open **Settings** > **Add-ons** > **Beszel Hub** > **Configuration** and set [`ingress_user`](#ingress_user-optional) to that account's email address.
-3. Save and restart the app.
-4. Open the Beszel panel - it loads straight into the dashboard.
+For a separately managed authentication proxy, read the upstream reference before using `TRUSTED_AUTH_HEADER` and `TRUSTED_PROXY_IPS`. A trusted header without restricted proxy IPs allows clients on the direct port to impersonate users. When `ingress_user` is active, the app sets its own trusted header and restricts it to the local Ingress proxy.
 
-Clear the option and restart to undo it.
+## Ports, Ingress and backups
 
-### Auto-login everywhere with `AUTO_LOGIN`
+| Port | Purpose |
+| --- | --- |
+| `8090/tcp` | Hub web UI, API and `/api/health`. Published on host port `8090` by default. Used by Agents, direct browsers and the Home Assistant Watchdog. |
+| Internal `8099` | Ingress proxy for the Home Assistant panel. This is not the Hub API port and is not published for external clients. |
 
-> Skips the login screen for **every** request from **every** source, including direct access on `http://<home-assistant-host>:8090`, which is published on your network. Upstream's own wording is: "Don't set this unless you want to completely bypass authentication and use only one user account." Use `ingress_user` instead unless you really want this.
+If you change the published host port in **Configuration > Network**, use the new port in `app_url` and external Agent/Bridge URLs. The Hub continues listening on `8090` inside its app network. Clearing the published port prevents the Hub's Watchdog from reaching it, so disable Watchdog if you intentionally remove that mapping. Remote Agents still need a reachable API endpoint.
 
-1. Create the account in the hub's web UI if it does not exist yet.
-2. Open **Settings** > **Add-ons** > **Beszel Hub** > **Configuration** and add:
+Ingress rewrites the Hub's page paths to Home Assistant's session-specific prefix. If the proxy cannot start, the app logs a warning and the Hub remains available through its direct port.
 
-   ```yaml
-   environment_vars:
-     - name: "AUTO_LOGIN"
-       value: "you@example.com"
-   ```
+The database, SSH keys and uploads persist under `/var/lib/beszel-hub`, with the database directory at `/var/lib/beszel-hub/beszel_data`. Include the app in Home Assistant backups. Home Assistant stops it during backups for database consistency, so it is briefly unavailable. Preserve the existing data when restoring or moving a Hub.
 
-3. Save and restart the app.
+## Troubleshooting
 
-Remove the entry and restart to undo it. `AUTO_LOGIN` takes precedence over `ingress_user`, and the app logs a warning at startup when both are set.
+| Problem | Check |
+| --- | --- |
+| Ingress panel fails to load | Check the startup log and `app_url` base path, then try the direct Hub URL. |
+| Generated Agent commands contain the Home Assistant URL | Set `app_url` to the Hub's reachable URL, save and restart. |
+| Automatic Ingress login does not work | Confirm the email belongs to an existing Hub account and restart after changing `ingress_user`. |
+| Direct port no longer asks for a password | Remove `AUTO_LOGIN` and its prefixed form from `environment_vars`, then restart. |
+| First-user variables have no effect | The database is already initialized. Use the Hub's account management instead. |
+| Watchdog restarts after changing network settings | Restore the published API port or disable Watchdog if intentionally removing it. |
+| Agent cannot connect | Check the reachable API URL, base path, public key, token and logs on both sides. |
 
-## Getting started
-
-1. Install and start the app.
-2. Open the web UI from the Home Assistant sidebar, or directly at `http://<home-assistant-host>:8090`.
-3. Create the first admin user when prompted.
-4. Add systems from the Beszel UI and point Agents at this Hub.
-
-## Notes
-
-- The Home Assistant watchdog checks `http://[HOST]:8090/api/health`. It uses the same published port as the web UI, so clearing that port in the app's network settings also breaks the watchdog.
-- The hub database, SSH key, and uploads live in the app data directory, which Home Assistant includes in backups. The app is set to `backup: cold`, so Home Assistant stops it for the duration of a backup - the hub is briefly unreachable, but the SQLite database is captured in a consistent state.
-- The app is served through Home Assistant Ingress, so it appears in the sidebar and needs no port to be opened for the UI. An nginx front-end inside the app rewrites the paths Beszel bakes into its HTML to the per-session Ingress prefix on each request, so the changing Ingress token is handled automatically.
-- Port `8090` stays published and is still needed: Agents connect to the Hub on it, and it remains available for direct access and reverse proxies. Ingress covers the browser UI only.
-- **Set `app_url` if you use Ingress.** The "add system" dialog builds the Agent install commands from `app_url`, falling back to the address in your browser's URL bar. Viewed through Ingress that fallback is the Home Assistant address, which Agents cannot use to reach the Hub, so the generated commands would be wrong. Set `app_url` to the Hub's own reachable URL, for example `http://<home-assistant-host>:8090`.
-- If the Ingress panel does not load, check the app log. Ingress is never fatal: when the proxy cannot start - for example because the path in `app_url` cannot be mapped to an Ingress prefix - the app logs a warning and carries on serving the Hub on port `8090`.
-- Agents can run either as the apps in this repository or on external machines.
-
-## Need Help?
-
-- Report app issues on GitHub: https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues
-- Check the upstream Beszel docs: https://github.com/henrygd/beszel
+See the [installation guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) for more detail, or [report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) with versions and redacted logs.

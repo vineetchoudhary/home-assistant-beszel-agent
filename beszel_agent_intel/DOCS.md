@@ -1,77 +1,63 @@
-# Beszel Agent (Intel GPU) for Home Assistant
+# Beszel Agent (Intel GPU)
 
-Monitor your Home Assistant system with Beszel, including **Intel GPU** metrics and **S.M.A.R.T. disk health**. This app runs the Beszel agent with `intel_gpu_top`, `nvtop`, and smartmontools, and reports stats to your Beszel Hub.
-
-## What it monitors:
-
-- CPU, memory, disk, and network usage
-- Home Assistant Apps (via Docker API)
-- Intel GPU utilisation, power, and frequency
-- S.M.A.R.T. disk health data
-- Historical data with trends
+Monitor CPU, memory, disk, network and Home Assistant app usage, plus Intel GPU metrics and S.M.A.R.T. disk health, in your Beszel Hub. This variant includes intel_gpu_top, nvtop and smartmontools.
 
 ## Requirements
 
-**This app is amd64 only.** The `intel_gpu_top` tool it depends on is not packaged for aarch64, and Intel GPUs are x86 hardware in practice.
+Supports **amd64 only**, because `intel_gpu_top` is unavailable on aarch64. Use an existing Beszel Hub on this Home Assistant host or another machine. **Disable Protection mode** for Intel Arc/Xe monitoring, S.M.A.R.T. disk access and Docker app statistics. Older i915 GPUs may work with protection enabled because video-device rules and `PERFMON` apply in either mode.
 
-**Protection mode.** What it gates is narrower than you might expect:
+## Setup
 
-| Needs Protection mode off? | |
+1. Add this repository and install **Beszel Agent (Intel GPU)** from the Home Assistant app store. The [installation guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) includes screenshots.
+2. Open your existing Hub, or install and start **Beszel Hub** and create its first account at `http://<home-assistant-host>:8090`.
+3. In the Hub, choose **Add System**. Copy its public key and token into this app's **Configuration**, then set `hub_url` to the Hub's reachable URL. Use this Home Assistant host's address and Agent port `45876` if the Hub asks for the monitored system's host and port.
+4. Apply the Protection mode requirements above. Save the configuration and start the app. Save and restart after later configuration changes.
+5. Check the app's **Log** for errors and confirm that the system reports live readings in the Hub.
+
+## Configuration
+
+Every option available in the app configuration is listed below. Replace the three connection values in this example. Leave the optional lists empty until you need them.
+
+```yaml
+key: "ssh-ed25519 REPLACE_WITH_YOUR_HUB_PUBLIC_KEY"
+hub_url: "http://192.168.1.100:8090"
+token: "replace-with-system-token"
+environment_vars: []
+custom_volumes: []
+```
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `key` | Empty, required | The complete SSH public key from the Hub's **Add System** dialog. Keep the `ssh-` prefix and key contents. This is a public key, even though Home Assistant masks the field. |
+| `hub_url` | Empty, required | The Hub's HTTP or HTTPS address, including its port and any configured base path. For the Hub app, use `http://<home-assistant-host>:8090`. Use the direct Hub address rather than the Home Assistant UI or an Ingress URL. |
+| `token` | Empty, required | The Agent registration token from the Hub's **Add System** dialog. This is a secret and is separate from the SSH public key or a Home Assistant access token. |
+| `environment_vars` | `[]` | Optional list of additional Beszel Agent environment variables. Each entry requires `name` and `value`, described below. |
+| `custom_volumes` | `[]` | Optional list of path checks. Each entry requires `host_path` and `container_path`. This option cannot create mounts. |
+
+The app refuses to start if `key`, `hub_url` or `token` is empty. Keep these connection settings in their dedicated fields.
+
+## Shared options
+
+### `environment_vars`
+
+Use this list for supported [Beszel Agent environment variables](https://www.beszel.dev/guide/environment-variables#agent). Merge all optional entries into one list rather than repeating the `environment_vars` key.
+
+| Entry field | Requirement |
 | --- | --- |
-| `/dev/dri` render nodes (`video: true`) | No - Home Assistant applies the device rules either way |
-| `PERFMON` capability, used by the i915 backend | No - capabilities are always applied |
-| Disk access for S.M.A.R.T. (`full_access`) | **Yes** |
-| App stats from the Docker API (`docker_api`) | **Yes** |
-
-So an older i915 Intel GPU may report fine with protection left on. **Arc and Xe GPUs, and S.M.A.R.T., need it off.** The startup log lists what the app can actually see.
-
-## Intel GPU Monitoring
-
-Beszel picks a GPU collector automatically. To pin one, set `GPU_COLLECTOR` under `environment_vars`:
+| `name` | A nonempty variable name matching `[A-Za-z_][A-Za-z0-9_]*`, such as `LOG_LEVEL`. |
+| `value` | A nonempty string. Quote numbers and booleans, such as `"30"` and `"true"`. |
 
 ```yaml
 environment_vars:
-  - name: "GPU_COLLECTOR"
-    value: "intel_gpu_top"
+  - name: LOG_LEVEL
+    value: "debug"
 ```
 
-Supported values on this app are `intel_gpu_top` and `nvtop`.
+Entries with empty fields or invalid names are skipped with a warning. Values are stored in app options and may be included in Home Assistant backups, so handle credentials accordingly.
 
-If you have more than one render node, point the agent at a specific device:
+### Private CA certificates
 
-```yaml
-environment_vars:
-  - name: "INTEL_GPU_DEVICE"
-    value: "drm:/dev/dri/card0"
-```
-
-To turn GPU monitoring off entirely, set `SKIP_GPU` to `true`.
-
-The app log lists the render nodes it can see at startup, which is the quickest way to tell whether the container has GPU access.
-
-See the [upstream GPU guide](https://beszel.dev/guide/gpu) for the full collector reference.
-
-## S.M.A.R.T. Monitoring
-
-`smartmontools` is bundled, matching upstream's own Intel image. Disks are detected automatically:
-
-- SATA/SAS drives (`/dev/sd*`)
-- NVMe drives (`/dev/nvme*`)
-
-No manual configuration is required, but Protection mode must be off here too.
-
-## Watchdog and Healthcheck
-
-This app uses two internal ports:
-
-- `45876/tcp` for the Beszel agent
-- `45877/tcp` for a lightweight HTTP watchdog endpoint
-
-## Connecting to a Hub with a self-signed certificate
-
-Beszel 0.19.0 made agents verify HTTPS certificates. If `hub_url` is an `https://` address served by a self-signed or otherwise untrusted certificate, the agent rejects the connection until you point it at the signing CA.
-
-This app mounts Home Assistant's `/ssl` folder read-only, so put the CA certificate there and name it with `CA_CERT_FILE`:
+For an HTTPS Hub with a private or self-signed CA, put its PEM CA certificate in Home Assistant's `/ssl` folder, which this app mounts read-only. Add `CA_CERT_FILE` to your existing `environment_vars` list:
 
 ```yaml
 hub_url: "https://beszel.example.com"
@@ -80,17 +66,82 @@ environment_vars:
     value: "/ssl/beszel-ca.crt"
 ```
 
-The file must be PEM encoded. If `CA_CERT_FILE` is set but the file cannot be read or contains no valid certificate, the agent stops at startup rather than falling back to an unverified connection - the log records a `CA_CERT_FILE` error. Leave the setting unset if your Hub uses plain HTTP or a publicly trusted certificate.
+Keep your `key` and `token` configured. The certificate must match the Hub's certificate chain and hostname. An unreadable file or a file without a valid PEM certificate stops startup with a `CA_CERT_FILE` error. Leave the variable unset for plain HTTP or publicly trusted HTTPS.
 
-## Installation and Setup
+### `custom_volumes`
 
-Follow the [Installation and Setup Guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) to install the app.
+This option checks whether paths are already visible inside the app. **It does not mount host directories or grant disk access.** Home Assistant controls mounts through the app's declared mappings and device permissions.
 
-## Need Help?
+| Entry field | Requirement |
+| --- | --- |
+| `host_path` | A nonempty descriptive source path used in the startup log. The app does not mount or check this host path. |
+| `container_path` | The nonempty path to check inside the app. A final `:ro` or `:rw` is stripped for the check and does not change access permissions. |
 
-- [Report issues on GitHub](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues)
-- [Check out Beszel docs](https://github.com/henrygd/beszel)
+This example checks the `/ssl` mapping that the app already provides:
 
-## License
+```yaml
+custom_volumes:
+  - host_path: "/ssl"
+    container_path: "/ssl:ro"
+```
 
-MIT - see [LICENSE](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/LICENSE)
+Missing paths produce warnings. Leave `custom_volumes: []` for normal operation.
+
+## Intel GPU configuration
+
+Collector selection is automatic. Add these optional variables to the same `environment_vars` list when you need an override:
+
+| Variable | Setting |
+| --- | --- |
+| `GPU_COLLECTOR` | `intel_gpu_top` or `nvtop`. Omit to use automatic selection. |
+| `INTEL_GPU_DEVICE` | Select a device for `intel_gpu_top`, for example `drm:/dev/dri/card0`. Omit to use its default device. |
+| `SKIP_GPU` | Set to `"true"` to disable GPU monitoring. Omit for normal GPU detection. |
+
+```yaml
+environment_vars:
+  - name: GPU_COLLECTOR
+    value: "intel_gpu_top"
+  - name: INTEL_GPU_DEVICE
+    value: "drm:/dev/dri/card0"
+```
+
+The startup log lists visible nodes under `/dev/dri`. Select a device that exists on your host. See the [upstream GPU guide](https://beszel.dev/guide/gpu) for collector details.
+
+## S.M.A.R.T. configuration
+
+SATA/SAS (`/dev/sd*`) and NVMe (`/dev/nvme*`) disks are detected automatically. **Protection mode must be disabled** for disk access. Check the startup log for `smartctl` and the detected drives.
+
+To select devices explicitly or supply a device type, add `SMART_DEVICES` to the existing `environment_vars` list. Replace these paths and types with those for your disks:
+
+```yaml
+environment_vars:
+  - name: SMART_DEVICES
+    value: "/dev/nvme0:nvme,/dev/sda:sat"
+```
+
+Leave this variable unset for automatic detection. See the [upstream S.M.A.R.T. guide](https://beszel.dev/guide/smart-data) for device-type details.
+
+## Ports, watchdog and storage
+
+| Port | Purpose |
+| --- | --- |
+| `45876/tcp` | Agent SSH listener, used when the Hub connects to this Agent. |
+| `45877/tcp` | Home Assistant Watchdog endpoint at `/cgi-bin/health`. The helper starts only when Watchdog is enabled. |
+
+The app uses host networking. Stop another Agent variant before starting this one so their listeners do not conflict. The watchdog helper always binds port `45877` and cannot be moved through app options. If that port is occupied, disable **Watchdog** on the app's **Info** tab and restart the app.
+
+Home Assistant provides persistent app storage at `/var/lib/beszel-agent`. Include the app in Home Assistant backups to preserve its state.
+
+## Troubleshooting
+
+| Problem | Check |
+| --- | --- |
+| Required configuration error | Fill in all three connection fields, then save and start again. |
+| Hub does not receive readings | Check the Hub URL, public key, token, network reachability and both the Agent and Hub logs. |
+| HTTPS or `CA_CERT_FILE` errors | Check the Hub hostname, PEM CA file and its `/ssl` path. |
+| Missing Home Assistant app statistics | Disable Protection mode to allow Docker API access. |
+| Missing Intel GPU readings | Check the startup log for `/dev/dri` devices, remove incorrect collector/device overrides and disable Protection mode for Arc/Xe GPUs. |
+| Missing disk health | Disable Protection mode, check detected drives and verify any `SMART_DEVICES` paths and types. |
+| Repeated Watchdog restarts | Check the log for a port `45877` conflict or startup error. Disable Watchdog and restart if another service needs that port. |
+
+See the [installation and troubleshooting guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) for more detail, or [report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) with versions and redacted logs.

@@ -1,77 +1,32 @@
 # Beszel for Home Assistant
 
-Run Beszel inside Home Assistant with apps for both the Hub and the Agent. Monitor your Home Assistant system and other hosts with a lightweight monitoring stack.
+Run [Beszel](https://github.com/henrygd/beszel) Hub and Agent apps in Home Assistant to monitor your system and other hosts.
 
-## Available Apps
+![Beszel repository in the Home Assistant app store, showing the Hub and five Agent variants](docs/screenshots/beszel-apps.jpg)
 
-The six existing apps are:
+## Quick installation
 
-| App | What it adds | Architectures |
-| --- | --- | --- |
-| **Beszel Hub** | The Beszel web UI and API, inside Home Assistant | amd64, aarch64 |
-| **Beszel Agent** | Standard lightweight monitoring | amd64, aarch64 |
-| **Beszel Agent (S.M.A.R.T.)** | S.M.A.R.T. disk health monitoring | amd64, aarch64 |
-| **Beszel Agent (Intel GPU)** | Intel GPU metrics + S.M.A.R.T. | amd64 only |
-| **Beszel Agent (AMD GPU)** | AMD GPU metrics + S.M.A.R.T. | amd64, aarch64 |
-| **Beszel Agent (NVIDIA GPU)** | NVIDIA GPU metrics + S.M.A.R.T. - [see the caveats first](beszel_agent_nvidia/DOCS.md) | amd64, aarch64 |
-| **Beszel Bridge** | Expose Hub systems as Home Assistant devices and entities through MQTT | amd64, aarch64 |
-
-Every GPU variant bundles S.M.A.R.T. support, matching upstream Beszel - which ships smartmontools in all of its non-scratch images rather than offering separate with/without builds.
-
-## Quick Start
-
-Click this button to add the repository:
+Add this repository with the button below, or paste `https://github.com/vineetchoudhary/home-assistant-beszel-agent` into **Settings > Apps > Install app > ⋮ > Repositories**.
 
 [![Open Home Assistant and add this app repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/vineetchoudhary/home-assistant-beszel-agent)
 
-Or add it manually by following the [step-by-step installation and setup guide with screenshots](docs/INSTALLATION.md).
+1. Use your existing Hub, or install and start **Beszel Hub**, then create an account at `http://<home-assistant-host>:8090`.
+2. Install **Beszel Agent**. In the Hub, choose **Add System**, copy its public key and token into the Agent's `key` and `token` options, and set `hub_url` to your Hub's address.
+3. Save and start the Agent, then check the Hub for live metrics.
+
+For screenshots and advanced options, see the [installation guide](docs/INSTALLATION.md).
+
+## Beszel Bridge
+
+[Beszel Bridge](beszel_bridge/DOCS.md) brings Hub readings into Home Assistant through MQTT.
+
+[![Beszel Bridge dashboard showing server readings and Bridge and Hub connection status](docs/screenshots/beszel-bridge/overview-desktop.webp)](beszel_bridge/DOCS.md)
 
 ## Documentation
-- [Step by Step Setup and Configuration Guide with Screenshots](docs/INSTALLATION.md)
-- [Beszel Hub - Setup and Configuration](beszel_hub/DOCS.md)
-- [Beszel Bridge - HA Entities and Dashboards (Development Preview)](beszel_bridge/DOCS.md)
-- [Beszel Dashboard Templates](docs/dashboards/beszel/README.md)
-- [Beszel Agent - Setup and Configuration](beszel_agent/DOCS.md)
-- [Beszel Agent S.M.A.R.T. - Setup with S.M.A.R.T. Monitoring](beszel_agent_smart/DOCS.md)
-- [Beszel Agent Intel GPU - Setup and Configuration](beszel_agent_intel/DOCS.md)
-- [Beszel Agent AMD GPU - Setup and Configuration](beszel_agent_amd/DOCS.md)
-- [Beszel Agent NVIDIA GPU - Setup and Configuration](beszel_agent_nvidia/DOCS.md)
-- [Testing Instructions](docs/TESTING.md)
-- [Contributing Guide](docs/CONTRIBUTING.md)
-- [Architecture Overview](docs/ARCHITECTURE.md)
-- [Release Process](docs/RELEASE.md)
-- [Manual HA OS Checks and Screenshot Checklist](docs/MANUAL_CHECKLIST.md)
 
-## Which Version Should I Use?
+- [App selection and configuration](docs/APPS.md)
+- [Home Assistant entities and dashboards](beszel_bridge/DOCS.md) (unreleased Bridge preview)
+- [Contributing](docs/CONTRIBUTING.md) · [Testing](docs/TESTING.md) · [Architecture](docs/ARCHITECTURE.md)
+- [Releases](docs/RELEASE.md) · [Manual HA OS checks](docs/MANUAL_CHECKLIST.md)
 
-**Use Beszel Hub if:**
-- You want to run the Beszel server directly inside Home Assistant
-- You prefer a single-box setup for a small lab or home deployment
-
-**Use Beszel Agent (Standard) if:**
-- You just need basic system monitoring
-- You want the smallest image size
-
-**Use Beszel Agent (S.M.A.R.T.) if:**
-- You want to monitor disk health
-- You need S.M.A.R.T. data from your drives, but have no GPU to watch
-
-**Use a GPU variant if:**
-- You want GPU metrics as well as disk health - they all include S.M.A.R.T.
-- Pick **Intel GPU** for Intel integrated or Arc graphics (amd64 only)
-- Pick **AMD GPU** for Radeon cards - it reads sysfs, so no vendor tooling is needed
-- Pick **NVIDIA GPU** only after reading [its caveats](beszel_agent_nvidia/DOCS.md); Home Assistant cannot attach an NVIDIA GPU to an app except on a Supervised host configured with the NVIDIA runtime as Docker's default
-
-All GPU variants need **Protection mode disabled** to reach GPU and disk devices.
-
-## What's Beszel?
-
-Beszel is a lightweight monitoring solution that keeps track of your server's vital signs. It's pretty efficient and doesn't hog resources. Check out the [main Beszel project](https://github.com/henrygd/beszel) to learn more.
-
-## Getting Help
-
-Having trouble? [Open an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) and I'll try to help.
-
-## License
-
-MIT - see [LICENSE](LICENSE) for the boring legal stuff.
+[Report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) · [MIT license](LICENSE)

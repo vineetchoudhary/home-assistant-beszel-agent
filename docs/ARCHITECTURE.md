@@ -1,104 +1,23 @@
-# How It Works
+# Architecture
 
-Since you're here, you probably want to know what's going on under the hood.
+Agents collect host metrics, the Hub stores and displays them, and the optional Bridge exposes them to Home Assistant.
 
-This repository ships two kinds of app:
-
-- **Agent apps** collect metrics and report to a Beszel Hub
-- **Hub apps** run the Beszel server itself - the web UI, the API, and the database
-
-They are independent. You can run only agents and point them at a hub elsewhere, run only the hub and feed it from agents on other machines, or run both on the same Home Assistant box.
-
-## Agent app
-
-```
-┌──────────────────────────────────────────────┐
-│         Home Assistant Supervisor            │
-│  ┌────────────────────────────────────────┐  │
-│  │      Beszel Agent App Container     │  │
-│  │  ┌──────────────────────────────────┐  │  │
-│  │  │      bashio (config reader)      │  │  │
-│  │  └────────────────┬─────────────────┘  │  │
-│  │                   │                    │  │
-│  │  ┌────────────────▼─────────────────┐  │  │
-│  │  │       run.sh (entrypoint)        │  │  │
-│  │  └────────────────┬─────────────────┘  │  │
-│  │                   │                    │  │
-│  │  ┌────────────────▼─────────────────┐  │  │
-│  │  │       Beszel Agent Binary        │  │  │
-│  │  │  (monitors system/containers)    │  │  │
-│  │  └────────────────┬─────────────────┘  │  │
-│  │                   │                    │  │
-│  │  ┌────────────────▼─────────────────┐  │  │
-│  │  │    HTTP Healthcheck Helper       │  │  │
-│  │  │    (watchdog only, optional)     │  │  │
-│  │  └────────────────┬─────────────────┘  │  │
-│  │                   │                    │  │
-│  └───────────────────┼────────────────────┘  │
-│     Ports 45876 (agent) / 45877 (health)     │
-└───────────────────────┼──────────────────────┘
-                        │
-                        ▼
-               ┌──────────────────┐
-               │    Beszel Hub    │
-               │ (this app, or │
-               │    elsewhere)    │
-               └──────────────────┘
+```mermaid
+flowchart LR
+    A[Beszel Agents] --> H[Local or remote Hub]
+    H -->|Authenticated API| B[Beszel Bridge]
+    B -->|Discovery and readings| M[MQTT broker]
+    M --> E[HA devices and dashboards]
 ```
 
-Variants:
+| App | Runtime | Ports and storage |
+| --- | --- | --- |
+| Agent | `run.sh` reads bashio options and starts Beszel plus an HTTP health helper | Agent `45876`, watchdog `45877`, app data persists |
+| Hub | Beszel server with an internal Ingress proxy | API/UI/watchdog `8090`, Ingress `8099`, database and keys in app data |
+| Bridge | Go HTTP collector, typed metric adapters and MQTT publisher | Internal `8099/health` and redacted `8099/status`, identity/manifest under `/data` |
 
-| Directory | Adds | Base | Platforms |
-| --- | --- | --- | --- |
-| `beszel_agent` | - | Alpine | amd64, arm64 |
-| `beszel_agent_smart` | smartmontools | Alpine | amd64, arm64 |
-| `beszel_agent_intel` | `intel_gpu_top`, `nvtop`, smartmontools | Alpine | amd64 |
-| `beszel_agent_amd` | `amdgpu.ids`, `nvtop`, smartmontools | Alpine | amd64, arm64 |
-| `beszel_agent_nvidia` | `nvtop`, smartmontools | **Debian** | amd64, arm64 |
+Agent/Hub images use Alpine except NVIDIA, which uses Debian for injected glibc tools and the amd64 NVML build. Intel is amd64-only because `intel_gpu_top` is unavailable on aarch64. See [app variants](APPS.md).
 
-Two things drive those choices:
+The Bridge uses a normal Hub account, read-only `/ssl`, normal container networking and no published port or hardware privileges. [Compatibility policy](../beszel_bridge/compatibility.json) selects verified Hub schemas. Source timestamps control freshness, while the Hub's public SSH key and system ID define identity. Discovery is retained, live readings are not, and liveness is independent of upstream readiness.
 
-- `igt-gpu-tools`, which provides `intel_gpu_top`, is packaged for x86_64 only, so the Intel variant is amd64-only.
-- The NVIDIA variant uses the Debian base because the NVIDIA Container Toolkit injects a glibc-linked `nvidia-smi` and driver libraries, which will not run against musl. It also pulls the `_glibc` agent build on amd64, since Beszel compiles its NVML collector for `linux/amd64` with glibc only. See [`beszel_agent_nvidia/DOCS.md`](../beszel_agent_nvidia/DOCS.md) for why this variant is unusable on Home Assistant OS.
-
-## Hub app
-
-```
-┌──────────────────────────────────────────────┐
-│         Home Assistant Supervisor            │
-│  ┌────────────────────────────────────────┐  │
-│  │       Beszel Hub App Container      │  │
-│  │  ┌──────────────────────────────────┐  │  │
-│  │  │      bashio (config reader)      │  │  │
-│  │  └────────────────┬─────────────────┘  │  │
-│  │                   │                    │  │
-│  │  ┌────────────────▼─────────────────┐  │  │
-│  │  │       run.sh (entrypoint)        │  │  │
-│  │  └────────────────┬─────────────────┘  │  │
-│  │                   │                    │  │
-│  │  ┌────────────────▼─────────────────┐  │  │
-│  │  │        Beszel Hub Binary         │  │  │
-│  │  │   serve --http 0.0.0.0:8090      │  │  │
-│  │  │   web UI + REST API + /api/health│  │  │
-│  │  └────────────────┬─────────────────┘  │  │
-│  │                   │                    │  │
-│  │  ┌────────────────▼─────────────────┐  │  │
-│  │  │  /var/lib/beszel-hub/beszel_data │  │  │
-│  │  │  SQLite DB + hub SSH key         │  │  │
-│  │  │  (app data dir, backed up)    │  │  │
-│  │  └──────────────────────────────────┘  │  │
-│  └────────────────────────────────────────┘  │
-│                  Port 8090                   │
-└───────────────────────┼──────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        ▼                               ▼
-┌────────────────┐             ┌────────────────┐
-│  Agent app  │             │  Agents on     │
-│  (same HA box) │             │  other hosts   │
-└────────────────┘             └────────────────┘
-```
-
-One variant: `beszel_hub`, Alpine, amd64 + arm64.
-
-Port `8090` serves the web UI, the REST API, and the `/api/health` endpoint the Home Assistant watchdog polls. The app is marked `backup: cold` so Home Assistant stops it while taking a backup, which keeps the SQLite database consistent in the snapshot.
+Hub backups stop the server for SQLite consistency. Bridge backups preserve identity and owned topics. See [Hub configuration](../beszel_hub/DOCS.md), [Bridge setup](../beszel_bridge/DOCS.md) and pending [release gates](BRIDGE_READINESS.md).

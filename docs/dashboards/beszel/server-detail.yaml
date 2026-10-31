@@ -1,0 +1,60 @@
+title: Beszel server
+views:
+  - title: Server detail
+    path: server-detail
+    icon: mdi:server
+    cards:
+      - type: entities
+        title: Server readings
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: binary_sensor.beszel_server_connectivity
+            name: Connectivity
+          - entity: sensor.beszel_server_cpu_usage
+            name: CPU usage
+          - entity: sensor.beszel_server_memory_usage
+            name: Memory usage
+          - entity: sensor.beszel_server_disk_usage
+            name: Disk usage
+          - entity: sensor.beszel_server_uptime
+            name: Uptime
+          - entity: sensor.beszel_server_last_sample
+            name: Last sample
+      - type: history-graph
+        title: CPU and memory
+        hours_to_show: 24
+        entities:
+          - entity: sensor.beszel_server_cpu_usage
+            name: CPU
+          - entity: sensor.beszel_server_memory_usage
+            name: Memory
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.beszel_server_network_receive
+            state_not: unknown
+          - condition: state
+            entity: sensor.beszel_server_network_receive
+            state_not: unavailable
+          - condition: state
+            entity: sensor.beszel_server_network_transmit
+            state_not: unknown
+          - condition: state
+            entity: sensor.beszel_server_network_transmit
+            state_not: unavailable
+        card:
+          type: history-graph
+          title: Network traffic
+          hours_to_show: 24
+          entities:
+            - entity: sensor.beszel_server_network_receive
+              name: Receive
+            - entity: sensor.beszel_server_network_transmit
+              name: Transmit
+      - type: button
+        name: Open Beszel
+        icon: mdi:open-in-new
+        tap_action:
+          action: url
+          url_path: BESZEL_HUB_URL

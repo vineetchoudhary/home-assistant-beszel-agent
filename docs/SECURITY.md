@@ -1,18 +1,7 @@
 # Security
 
-Report beszel and beszel-agent security issues to [beszel maintainers](https://github.com/henrygd/beszel/security).
+Only the latest release receives security fixes.
 
-## Which Versions Get Updates?
+Report app vulnerabilities privately through a [security advisory](https://github.com/vineetchoudhary/home-assistant-beszel-agent/security/advisories) or [email](mailto:vineet@developerinsider.co). Avoid public issues.
 
-Only the latest version gets security fixes. If you're behind, update to get the latest patches.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| Latest  | :white_check_mark: |
-| Older   | :x:                |
-
-## Found a Security Issue in app?
-
-**Please don't open a public issue.** That just tips off the bad actors.
-
-Instead open a [secuirity advisory](https://github.com/vineetchoudhary/home-assistant-beszel-agent/security/advisories) or contact [me](mailto:vineet@developerinsider.co) directly.
+Report upstream Beszel or Agent vulnerabilities to the [Beszel maintainers](https://github.com/henrygd/beszel/security).

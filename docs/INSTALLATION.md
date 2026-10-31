@@ -1,127 +1,88 @@
-# Beszel Apps Installation & Setup Guide
+# Beszel installation and setup
 
-This guide walks you through installing and configuring the Beszel apps for Home Assistant. The screenshots focus on the Agent apps, but the repository also includes Beszel Hub apps.
+Choose a variant in the [app guide](APPS.md). These steps cover Agents, with Hub setup in step 8. For the development preview, use the [Bridge guide](../beszel_bridge/DOCS.md).
+
+Older screenshots use **Add-ons**, now called **Apps**. See [capture notes](SCREENSHOTS.md).
 
 ## 1. Open Home Assistant Apps
-Open your Home Assistant instance and navigate to Settings. Click on "Apps":
-![Step 1](screenshots/1-ha-settings.webp)
 
-## 2. Open App Store
-Click on "App Store" button on bottom right:
-![Step 2](screenshots/2-ha-apps.webp)
+Open **Settings > Apps**.
+
+![Home Assistant Settings](screenshots/1-ha-settings.webp)
+
+## 2. Open the App store
+
+Choose **Install app**.
+
+![Install app](screenshots/2-ha-apps.webp)
 
 ## 3. Open App Store Repositories
-Click on the three dots in the top right and select "Repositories":
-![Step 3](screenshots/3-ha-apps-store-repo.webp)
+
+Open the three-dot menu and choose **Repositories**.
+
+![Repositories menu](screenshots/3-ha-apps-store-repo.webp)
 
 ## 4. Add Custom Repository
-Paste following URL and click "Add" button:
-```
-https://github.com/vineetchoudhary/home-assistant-beszel-agent
-```
 
-![Step 4](screenshots/4-ha-apps-add-repo.webp)
+Add `https://github.com/vineetchoudhary/home-assistant-beszel-agent`.
+
+![Add repository](screenshots/4-ha-apps-add-repo.webp)
 
 ## 5. Confirm Repository Added
-You should see the Beszel app repository listed:
-![Step 5](screenshots/5-ha-apps-repo-added.webp)
 
-This repository provides six apps:
+Select an app from the repository. See [app differences and requirements](APPS.md).
 
-### 5.1 Beszel Hub
-Run the Beszel Hub directly inside Home Assistant for smaller or self-contained setups.
+![Repository added](screenshots/5-ha-apps-repo-added.webp)
 
-### 5.2 Beszel Agent
-For standard monitoring
+![Standard Agent](screenshots/5-beszel-agent-home-assistant.webp)
 
-![Step 5.1](screenshots/5-beszel-agent-home-assistant.webp)
-
-### 5.3 Beszel Agent (S.M.A.R.T.)
-For monitoring with S.M.A.R.T. disk health checks.
-
-![Step 5.2](screenshots/5-beszel-agent-smart-home-assistant.webp)
-
-### 5.4 Beszel Agent (Intel GPU)
-Intel GPU metrics plus S.M.A.R.T. disk health. amd64 only - the `intel_gpu_top` tool it needs is not packaged for aarch64.
-
-### 5.5 Beszel Agent (AMD GPU)
-AMD GPU metrics plus S.M.A.R.T. disk health. Reads GPU stats from sysfs, so no vendor tooling is required.
-
-### 5.6 Beszel Agent (NVIDIA GPU)
-NVIDIA GPU metrics plus S.M.A.R.T. disk health. **Read [its documentation](../beszel_agent_nvidia/DOCS.md) before installing** - Home Assistant apps cannot attach an NVIDIA GPU, so the GPU half only works on a Supervised host that has been configured with the NVIDIA runtime as Docker's default. Everything else in the app works regardless.
+![S.M.A.R.T. Agent](screenshots/5-beszel-agent-smart-home-assistant.webp)
 
 ## 6. Install a Beszel App
-Click on the Beszel app you want to install and then click "Install":
-![Step 6](screenshots/6-ha-beszel-agenet-install.webp)
 
+Open the app and choose **Install**.
+
+![Install the Agent](screenshots/6-ha-beszel-agenet-install.webp)
 
 ## 7. Open App Configuration
-After installation, open the configuration tab:
-![Step 7](screenshots/7-ha-beszel-agenet-config.webp)
+
+Open **Configuration** after installation.
+
+![Configuration tab](screenshots/7-ha-beszel-agenet-config.webp)
 
 ## 8. Fill in Required Configuration
 
-If you are installing `Beszel Hub`, you can leave the configuration empty and start the app right away. After it starts, open `http://<home-assistant-host>:8090` and create the first admin user.
+**Hub:** start with defaults, open `http://<home-assistant-host>:8090` and create the first account. See [Hub options](../beszel_hub/DOCS.md) for `app_url`, Ingress and authentication.
 
-The optional `app_url` setting is the public URL of your Hub - Beszel uses it for the links it puts in alert emails, so set it if you use notifications. Careful with paths: `https://example.com/beszel` makes the Hub serve everything under `/beszel/`, and plain `http://<home-assistant-host>:8090/` stops working. See [Beszel Hub - Setup and Configuration](../beszel_hub/DOCS.md) for the details.
-
-For Agent apps, fill in the values below.
-
-**key** - SSH public key
-
-Grab this from your Beszel Hub when you're adding a new system to monitor.
+**Agent:** in your Hub, choose **Add System** and copy the public key and token. Enter those values and the Hub's reachable URL:
 
 ```yaml
-key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample..."
-```
-
-**hub_url** - Beszel Hub URL
-
-Where your Beszel Hub is running.
-
-```yaml
+key: "your-hub-public-key"
 hub_url: "http://192.168.1.100:8090"
-```
-
-**token** - Authentication token
-
-Grab this from your Beszel Hub when you're adding a new system to monitor.
-
-```yaml
 token: "your-secret-token"
 ```
 
-Beszel Hub:
+![Hub Add System dialog](screenshots/8-beszel-config.webp)
 
-![Step 8](screenshots/8-beszel-config.webp)
-
-Enter your SSH key, Hub URL, and Token:
-
-![Step 8](screenshots/8-ha-beszel-agenet-config-fill.webp)
+![Agent connection options](screenshots/8-ha-beszel-agenet-config-fill.webp)
 
 ## 9. (Optional) Configure Custom Environment Variables and Volumes
 
-If you want to add custom environment variables and volume mappings you can do that here. 
+### Environment variables
 
-**environment_vars** - Extra environment variables
-
-Need to pass custom environment variables? Add them here:
+Use `environment_vars` for [upstream Agent options](https://www.beszel.dev/guide/environment-variables#agent):
 
 ```yaml
 environment_vars:
-  - name: "LOG_LEVEL"
+  - name: LOG_LEVEL
     value: "debug"
   - name: SMART_DEVICES
     value: "/dev/nvme0:nvme,/dev/sda:sat"
 ```
 
-Check available beszel agent environment variables [here](https://www.beszel.dev/guide/environment-variables#agent).
+### Self-signed certificates
 
-**CA_CERT_FILE** - Trust a Hub that uses a self-signed certificate
-
-Since Beszel 0.19.0 agents verify HTTPS certificates. If your `hub_url` is an `https://` address served by a self-signed or otherwise untrusted certificate, the agent rejects the connection until you point it at the signing CA.
-
-The Agent apps mount Home Assistant's `/ssl` folder read-only - the same folder your Home Assistant certificates live in. Copy the CA certificate there (over Samba, the File editor app, or `scp`), then name it with `CA_CERT_FILE`:
+Agents verify HTTPS certificates. For a private or self-signed CA, copy its PEM certificate into HA's `/ssl` folder, mounted read-only by the app:
 
 ```yaml
 hub_url: "https://beszel.example.com"
@@ -130,9 +91,9 @@ environment_vars:
     value: "/ssl/beszel-ca.crt"
 ```
 
-The file must be PEM encoded. If `CA_CERT_FILE` is set but the file cannot be read or contains no valid certificate, the agent stops at startup rather than falling back to an unverified connection, and Home Assistant's watchdog will keep restarting it - check the log for a `CA_CERT_FILE` error. Leave the setting unset if your Hub uses plain HTTP or a publicly trusted certificate.
+An unreadable or invalid CA file stops startup with a `CA_CERT_FILE` error and can cause watchdog restarts. Leave this option unset for HTTP or publicly trusted HTTPS.
 
-**custom_volumes** - Check that a path is visible to the app
+### Custom volume checks
 
 ```yaml
 custom_volumes:
@@ -140,56 +101,47 @@ custom_volumes:
     container_path: "/mnt/data:ro"
 ```
 
-> **This option does not mount anything.** Home Assistant builds an app's
-> mounts from the app's own `config.yaml`, and it does not allow an app to
-> mount an arbitrary host path chosen from its options. The entries here are only
-> checked for existence inside the app and reported in the log, which is useful
-> for confirming a path Home Assistant already shares. If the log says a path is
-> not present, no setting in this app can make it appear.
+**This option only checks existing paths inside the app.** It cannot mount arbitrary host directories. Home Assistant controls the app's mounts through `config.yaml`.
 
-![Step 9](screenshots/9-ha-beszel-agenet-custom-volumes.webp)
+![Custom volume checks](screenshots/9-ha-beszel-agenet-custom-volumes.webp)
 
 ## 10. Start the App
-Navigate back to the "Info" tab and click "Start":
-![Step 10](screenshots/10-ha-beszel-agenet-install-success.webp)
+
+Save the configuration, open **Info** and choose **Start**.
+
+![Start the Agent](screenshots/10-ha-beszel-agenet-install-success.webp)
 
 ## 11. Observe App Running
-You should see the app running successfully (You can check the logs for connection status).
-![Step 11](screenshots/11-ha-beszel-agenet-start.webp)
 
-For S.M.A.R.T. monitoring, app logs will show detected disks:
+Check the app status and logs for connection errors or detected disks.
 
-![Step 11](screenshots/11-beszel-agent-smart-log.webp)
+![Running Agent](screenshots/11-ha-beszel-agenet-start.webp)
 
-The Agent apps use two internal ports:
+![S.M.A.R.T. startup log](screenshots/11-beszel-agent-smart-log.webp)
 
-- `45876` for the Beszel agent connection from your Beszel Hub
-- `45877` for the internal Home Assistant watchdog healthcheck endpoint
-
-The Beszel Hub apps use:
-
-- `8090` for the Beszel web UI and API
+| Port | Purpose |
+| --- | --- |
+| `45876` | Agent connection from the Hub |
+| `45877` | Agent watchdog healthcheck |
+| `8090` | Hub web UI, API and watchdog |
 
 ## 12. (Optional) Disable Protection Mode
-If you are not seeing expected metrics, try disabling protection mode. It is required for other Apps stats (docker stats), S.M.A.R.T. monitoring on every variant, and Intel Arc/Xe GPUs. Plain GPU device access does not need it - Home Assistant applies the `/dev/dri` device rules either way - but `full_access` and host PID access are only granted to an unprotected app.
-![Step 12](screenshots/12-ha-beszel-agenet-protection-mode.webp)
 
-Protection Mode restricts app access to the host system. It's a security feature, but it limits what metrics Beszel can collect. Only disable it if you trust the app and beszel agent - it's open source, but disabling protection does give it broader system access.
+Disable Protection mode for Docker app statistics, S.M.A.R.T. and Intel Arc/Xe monitoring. Basic `/dev/dri` access works in either mode. Disabling protection grants broader host access, so use it only for trusted apps.
+
+![Protection mode](screenshots/12-ha-beszel-agenet-protection-mode.webp)
 
 ## 13. Verify Metrics in Beszel Hub
-Log in to your Beszel Hub instance and verify that metrics from your Home Assistant instance are being received:
-![Step 13](screenshots/13-beszel-dashboard.webp)
 
-For S.M.A.R.T. monitoring, you should see disk health metrics:
-![Step 13](screenshots/13-beszel-smart.webp)
+Open the Hub and confirm live readings and, where supported, disk health.
 
-## Troubleshooting & Support
-- If you encounter issues, check the app logs for errors.
-- If Home Assistant reports watchdog failures, check whether the logs mention the HTTP health endpoint on port `45877`.
-- If an Agent app stops right after starting with a `CA_CERT_FILE` error, the certificate path is wrong or the file is not valid PEM. Confirm the file is in `/ssl` and that `CA_CERT_FILE` points at it.
-- If host temperature sensors do not show in Beszel, check whether the app can see real sensor files:
-  - `/sys/class/hwmon/hwmon*/temp*_input`
-  - `/sys/class/thermal/thermal_zone*/temp`
-- For advanced configuration, see the main documentation or open an issue on GitHub.
+![Hub metrics](screenshots/13-beszel-dashboard.webp)
 
-**Enjoy monitoring your Home Assistant system with Beszel!**
+![Disk health](screenshots/13-beszel-smart.webp)
+
+## Troubleshooting
+
+- Check app logs first. For watchdog failures, check the Agent health endpoint on `45877` or the Hub's published port `8090`.
+- For `CA_CERT_FILE` errors, verify the PEM file exists under `/ssl` and the option matches its path.
+- For missing temperatures, check visibility of `/sys/class/hwmon/hwmon*/temp*_input` and `/sys/class/thermal/thermal_zone*/temp`.
+- For GPU limitations, use the [variant guide](APPS.md). Report unresolved problems with versions and redacted logs in a [GitHub issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues).

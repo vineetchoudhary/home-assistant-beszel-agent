@@ -1,0 +1,71 @@
+title: Beszel servers
+views:
+  - title: Servers
+    path: servers
+    icon: mdi:server-network
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: Server overview
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: binary_sensor.beszel_server_connectivity
+                name: Connectivity
+              - entity: sensor.beszel_server_system_status
+                name: System status
+              - entity: sensor.beszel_server_disk_usage
+                name: Disk usage
+              - entity: sensor.beszel_server_last_sample
+                name: Last sample
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.beszel_server_cpu_usage
+                state_not: unknown
+              - condition: state
+                entity: sensor.beszel_server_cpu_usage
+                state_not: unavailable
+              - condition: state
+                entity: sensor.beszel_server_memory_usage
+                state_not: unknown
+              - condition: state
+                entity: sensor.beszel_server_memory_usage
+                state_not: unavailable
+            card:
+              type: grid
+              columns: 2
+              square: false
+              cards:
+                - type: gauge
+                  entity: sensor.beszel_server_cpu_usage
+                  name: CPU usage
+                  min: 0
+                  max: 100
+                  severity:
+                    green: 0
+                    yellow: 70
+                    red: 90
+                - type: gauge
+                  entity: sensor.beszel_server_memory_usage
+                  name: Memory usage
+                  min: 0
+                  max: 100
+                  severity:
+                    green: 0
+                    yellow: 75
+                    red: 90
+      - type: entities
+        title: Beszel connection
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: binary_sensor.beszel_bridge_bridge_connected
+            name: Bridge connected
+          - entity: binary_sensor.beszel_bridge_hub_connected
+            name: Hub connected
+          - entity: sensor.beszel_bridge_last_sync
+            name: Last successful sync
+          - entity: sensor.beszel_bridge_hub_version
+            name: Hub version
