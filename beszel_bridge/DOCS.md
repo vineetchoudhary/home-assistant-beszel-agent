@@ -1,61 +1,53 @@
 # Beszel Bridge
 
-Expose a local or remote Hub as Home Assistant MQTT devices and entities. **Unreleased development preview.** See [readiness](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/BRIDGE_READINESS.md) before installation or publishing.
+Bring readings from a local or remote Beszel Hub into Home Assistant as MQTT devices and entities.
 
 ## Requirements
 
-- HA **2026.10.1 or newer**, the first tested version, plus an MQTT broker and HA's MQTT integration.
-- Hub **0.20.0 or 0.21.0**, as listed in [compatibility.json](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/beszel_bridge/compatibility.json).
-- A normal password-authenticated account with shared systems, preferably `readonly`. Superuser credentials, Agent tokens, OAuth-only accounts and interactive MFA are unsupported.
-- One Bridge publisher per Hub per HA installation. HACS and Agent changes are unnecessary.
+- Home Assistant **2026.10.1 or newer** and Hub **0.20.0 or 0.21.0**.
+- An MQTT broker connected to Home Assistant's MQTT integration.
+- A dedicated Hub account with a password and shared systems, preferably with the `readonly` role. Superuser credentials, Agent tokens, OAuth-only accounts and interactive MFA are unsupported.
 
-The Bridge supports **amd64 and aarch64**. It uses normal app networking and can run with Protection mode enabled. No inbound host port or hardware access is required.
+Supports 64-bit Intel/AMD (**amd64**) and ARM (**aarch64**) with Protection mode enabled. Use one Bridge per Hub per Home Assistant installation. No Agent changes or HACS components are needed.
 
-## Setup overview
+## Setup
 
-1. Prepare a dedicated normal Hub account and share the systems it should monitor, as shown below.
-2. Start an MQTT broker and connect Home Assistant's MQTT integration to that same broker. The Bridge does not install a broker or configure the integration for you.
-3. Set the Hub URL, account credentials and MQTT options in the app's **Configuration**. Use the local or remote Hub example below. Leave system and metric lists empty to monitor everything available to the account.
-4. Save and start the app. Check its log for `Bridge synchronized`, then open the MQTT integration to verify its devices and entities. Save and restart after later configuration changes.
+[Add this repository](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md#1-add-the-repository), then open **Settings > Apps > Install app**, choose **Beszel Bridge** and select **Install**.
 
-## Prepare the Hub account
+### 1. Share systems with the Bridge account
 
-1. Open the Hub's `/_/` admin panel, including any base path, and sign in as a PocketBase superuser. In **users**, create an account with an email, password, name and **readonly** role.
+Open the Hub's `/_/` admin panel, including any base path, and sign in as a superuser. Create a normal account in **users** with an email, password, name and **readonly** role.
 
-   ![Dedicated readonly Hub account](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/hub-readonly-account.webp)
+![Create a readonly Hub account](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/hub-readonly-account.webp)
 
-2. In **systems**, open each server's **users** picker, add the Bridge account and retain the owner's account. Choose **Set selection** and save.
+In **systems**, open each server's **users** picker and add the new account without removing the owner. Choose **Set selection** and save. Use this normal account in the Bridge, keeping the superuser account for administration.
 
-   ![Share a server with the Bridge account](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/hub-system-sharing.webp)
+![Share a server with the Bridge account](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/hub-system-sharing.webp)
 
-Use the new normal account for the Bridge. The superuser login is only for account management. See [Beszel account roles](https://www.beszel.dev/guide/user-accounts).
+### 2. Connect Home Assistant to MQTT
 
-## Hub running as an HA app
+Skip this if Home Assistant already uses your broker. Otherwise, open **Settings > Devices & services > Add integration**, search for **MQTT** and enter your broker's address, port and credentials. Match its TLS settings, then finish setup.
 
-Use the Hub's actual internal hostname from installed-app metadata and its API port `8090`. `localhost` points to the Bridge itself.
+![MQTT broker settings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/03-mqtt-broker.webp)
+
+![MQTT credentials and TLS settings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/04-mqtt-credentials.webp)
+
+### 3. Configure the Bridge
+
+For a Hub running as a Home Assistant app, replace `192.168.1.100` with Home Assistant's IP address under **Settings > System > Network**. Use the dedicated account from step 1:
 
 ```yaml
-hub_url: "http://ACTUAL_HUB_APP_HOSTNAME:8090"
+hub_url: "http://192.168.1.100:8090"
 hub_email: "ha-monitor@example.com"
 hub_password: "your-dedicated-account-password"
 mqtt_source: supervisor
 ```
 
-Include any Hub base path. Use the direct API URL: Ingress URLs, port `8099` and `ingress_user` serve browser access. Bridge access needs no published Hub port, although the Hub's own watchdog may require it.
+For a Hub on another machine, use its reachable LAN, VPN or HTTPS address, such as `https://monitoring.example.com/beszel`. Include any base path. Ingress URLs and `localhost` do not point to the Hub from the Bridge.
 
-## Hub running on another machine
+If the Hub's published port is disabled, use its [internal app hostname](https://contributors.home-assistant.io/apps/guides/communication/#the-internal-network) with port `8090`. The Hub's Watchdog needs its published port, so disable Watchdog on the Hub if removing that mapping.
 
-Keep the existing Hub and Agents running. Use the same options with a reachable LAN, VPN or reverse-proxy URL:
-
-```yaml
-hub_url: "https://monitoring.example.com/beszel"
-```
-
-Use HTTPS outside trusted networks. For a private CA, set `hub_ca_file: "/ssl/beszel-ca.crt"` to a readable PEM file. Hostnames and certificates are always verified. Browser-only SSO needs a separately supported noninteractive login method. The remote host needs no inbound Bridge port or HA API access.
-
-## MQTT configuration
-
-`mqtt_source: supervisor` uses the installed broker app's Supervisor service. HA must use the same broker and discovery prefix. For another broker:
+`mqtt_source: supervisor` gets settings from the installed broker app. For another broker, add these options:
 
 ```yaml
 mqtt_source: manual
@@ -67,174 +59,104 @@ mqtt_tls: true
 mqtt_ca_file: "/ssl/mqtt-ca.crt"
 ```
 
-`mqtt_host` accepts a hostname/IP. Leave `mqtt_ca_file` empty for publicly trusted TLS. Plain MQTT usually uses port `1883`. App options and HA backups can contain credentials even when fields are masked.
+Use the same broker and discovery prefix as Home Assistant. For private CAs, copy PEM certificates into `/ssl` and set `hub_ca_file` or `mqtt_ca_file`. Leave CA fields empty for publicly trusted certificates. Certificate and hostname verification remain enabled. Keep credentials private when sharing options, logs or backups.
 
-### Connect Home Assistant to MQTT
+### 4. Start and check devices
 
-Skip this if HA already uses the same broker. Enter your own broker settings instead of the example test hostname `broker`.
+Save and start the Bridge. Check for `Bridge synchronized` in its log, then open **Settings > Devices & services > MQTT**. You should see a Bridge device and one device per selected server. Save and restart after configuration changes.
 
-1. Open **Settings > Devices & services**.
+![Bridge and server devices in MQTT](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/06-mqtt-devices.webp)
 
-   ![Devices and services](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/01-ha-settings.webp)
-
-2. Choose **Add integration**, search for **MQTT** and select it, including a second picker if shown.
-
-   ![Add MQTT](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/02-add-mqtt.webp)
-
-3. Enter broker address, port and credentials. Match **Other settings** to its TLS requirements.
-
-   ![MQTT broker settings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/03-mqtt-broker.webp)
-
-   ![MQTT credentials and TLS options](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/04-mqtt-credentials.webp)
-
-4. Submit and finish. Assign device areas or choose **Skip and finish**.
-
-   ![Finish MQTT setup](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/05-mqtt-connected.webp)
+Use the [dashboard setup guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/dashboards/beszel/SETUP.md#add-a-dashboard) to display these readings.
 
 ## Configuration reference
 
-Every option available in the app configuration is listed below. Required Hub connection fields start as `null` and must be filled before the Bridge can run.
-
-### Hub options
+### Hub connection
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| `hub_url` | `null`, required | Direct HTTP or HTTPS Hub URL, including its API port and any base path. Ingress URLs, embedded credentials, query strings and fragments are rejected. |
-| `hub_email` | `null`, required | Email address of the normal password-authenticated Hub account that can see your selected systems. |
-| `hub_password` | `null`, required | That account's password. Agent tokens and PocketBase superuser credentials do not work here. |
-| `hub_ca_file` | `""` | Optional absolute path to a PEM CA file inside `/ssl`, such as `/ssl/beszel-ca.crt`, for a privately signed HTTPS Hub. Empty uses the system trust store. |
+| `hub_url` | Not set, required | Direct HTTP or HTTPS Hub URL, including its port and base path. Credentials, query strings and fragments are not accepted in the URL. |
+| `hub_email` | Not set, required | Email of the normal Hub account with access to the selected systems. |
+| `hub_password` | Not set, required | That account's password. |
+| `hub_ca_file` | `""` | Optional PEM CA file under `/ssl` for a privately signed HTTPS Hub. Empty uses system trust. |
 
-Include the Hub's base path when one is configured. Use its direct API port `8090` for the Hub app, rather than its internal Ingress proxy on `8099`. Certificate and hostname verification remain enabled.
-
-### MQTT options
+### MQTT connection
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| `mqtt_source` | `supervisor` | `supervisor` obtains broker settings from the installed broker app's Supervisor service. `manual` uses the fields below. |
-| `mqtt_host` | `""` | Required in manual mode. Broker hostname or IP address without a scheme, port or path. |
-| `mqtt_port` | `1883` | Manual broker port, from `1` to `65535`. Plain MQTT commonly uses `1883` and TLS commonly uses `8883`. |
-| `mqtt_username` | `""` | Manual broker username. Empty is suitable only if your broker permits that authentication mode. |
-| `mqtt_password` | `""` | Manual broker password. Keep this and the Hub password private. |
-| `mqtt_tls` | `false` | Enable TLS for a manual broker connection. Match the broker's TLS listener and port. |
-| `mqtt_ca_file` | `""` | Optional absolute path to a PEM CA file inside `/ssl`, such as `/ssl/mqtt-ca.crt`. Empty uses system trust. Applies to TLS connections in either source mode. |
+| `mqtt_source` | `supervisor` | Use the broker app's service settings, or choose `manual` for the fields below. |
+| `mqtt_host` | `""` | Required in manual mode. Hostname or IP address, without a scheme, port or path. |
+| `mqtt_port` | `1883` | Manual broker port, from `1` to `65535`. TLS commonly uses `8883`. |
+| `mqtt_username` | `""` | Manual broker username, if required. |
+| `mqtt_password` | `""` | Manual broker password, if required. |
+| `mqtt_tls` | `false` | Enable TLS for a manual connection. Match the broker's port. |
+| `mqtt_ca_file` | `""` | Optional PEM CA file under `/ssl` for MQTT TLS in either source mode. Empty uses system trust. |
 
-Supervisor mode replaces the host, port, username, password and TLS flag with service-provided values. Entering manual fields while leaving `mqtt_source: supervisor` does not override that service. If the service is unavailable, install/start the broker app or choose manual mode.
+In Supervisor mode, manual host, port, credentials and TLS settings are ignored. If the broker service is unavailable, start the broker app or switch to manual mode.
 
-Home Assistant and the Bridge must use the same broker. Copy private CA files into Home Assistant's `/ssl` folder before starting the Bridge. Invalid or unreadable CA files prevent setup. Both CA options require a file path inside `/ssl`, which the app mounts read-only.
-
-### Selection, polling and lifecycle options
+### Selection and updates
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| `include_systems` | `[]` | List of system record IDs to monitor. Empty selects every system accessible to the Hub account. IDs must contain exactly 15 lowercase letters or digits. |
-| `exclude_systems` | `[]` | List of system record IDs to omit. Exclusions take precedence over inclusions. The same ID format applies. |
-| `metrics` | `[]` | List of metric keys from the table below. Empty enables all supported metrics. System status, connectivity and Bridge diagnostics are always exposed. |
-| `poll_interval` | `30` | Seconds between polls, from `15` to `300`. Polling does not change the timestamps of the Hub's source samples. |
-| `stale_after` | `0` | Maximum sample age in seconds. `0` uses `max(180, 3 × poll_interval)`. An explicit value must meet that minimum and cannot exceed `86400`. |
-| `discovery_prefix` | `homeassistant` | MQTT discovery prefix used by Home Assistant. Only letters, numbers, underscores and hyphens are accepted. Clean up with the old setting before changing it. |
-| `ha_status_topic` | `homeassistant/status` | Home Assistant MQTT birth topic. Receiving `online` triggers a refresh. Match any customized HA setting. Empty topics and MQTT wildcards are rejected. |
-| `cleanup` | `false` | Set `true` for a one-shot removal of this Bridge's owned discovery and availability topics, then exit. Follow the cleanup procedure below and return it to `false` for normal operation. |
+| `include_systems` | `[]` | System record IDs to monitor. Empty selects all systems the account can access. |
+| `exclude_systems` | `[]` | System record IDs to omit. Exclusions take precedence. |
+| `metrics` | `[]` | Metric keys from the table below. Empty enables all supported readings. Status, connectivity and Bridge diagnostics are always included. |
+| `poll_interval` | `30` | Seconds between polls, from `15` to `300`. |
+| `stale_after` | `0` | Maximum sample age in seconds. `0` uses `max(180, 3 × poll_interval)`. Explicit values must meet that minimum and be at most `86400`. |
+| `discovery_prefix` | `homeassistant` | Home Assistant's MQTT discovery prefix. Use letters, numbers, underscores or hyphens. Clean up before changing it. |
+| `ha_status_topic` | `homeassistant/status` | Home Assistant's MQTT birth topic. Match any custom setting. Must be nonempty, without wildcards. |
+| `cleanup` | `false` | Remove this Bridge's MQTT entities and exit. Follow the cleanup steps below, then restore `false`. |
 
-## Selecting systems and metrics
-
-Use stable system record IDs from the Hub or `bridge check`:
+System IDs contain 15 lowercase letters or digits. In the Hub's `/_/` admin panel, open **systems** and copy the server's **id**. Replace `abc123def456ghi` with that value:
 
 ```yaml
 include_systems:
   - "abc123def456ghi"
-exclude_systems: []
 metrics:
   - cpu_usage
   - memory_usage
-  - disk_usage
-  - temperature
-  - network_receive
-  - network_transmit
-  - uptime
-  - last_sample
-poll_interval: 30
-stale_after: 0
-discovery_prefix: homeassistant
-ha_status_topic: homeassistant/status
-cleanup: false
 ```
 
-Empty include/metric lists select all accessible systems/supported metrics. Exclusions win. Use record IDs rather than system names. Status and connectivity are always exposed. Match `ha_status_topic` to HA's MQTT birth topic if customized.
-
-Polling supports `15` to `300` seconds. With `poll_interval: 30`, automatic freshness is `180` seconds. With `poll_interval: 300`, it is `900` seconds. Freshness follows the latest `1m` sample's `created` time, never a successful re-poll or system rename.
-
-## Entities and history
-
-### Check the discovered devices
-
-Start the Bridge and check for `Bridge synchronized` in its log. Open **Settings > Devices & services > MQTT** for the Bridge device and one device per selected server.
-
-![Bridge and server devices](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/06-mqtt-devices.webp)
-
-Open a server's sensors and the Bridge's connection diagnostics, then follow the [dashboard setup](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/dashboards/beszel/SETUP.md#add-a-dashboard).
-
-![Server readings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/07-server-entities.webp)
-
-### Available readings
-
-Use these exact keys in the `metrics` list:
+## Readings and history
 
 | Metric key | Reading |
 | --- | --- |
 | `cpu_usage` | CPU usage, percent. |
 | `memory_usage` | Memory usage, percent. |
 | `disk_usage` | Primary disk usage, percent. |
-| `temperature` | Highest observed temperature sensor reading, °C. Appears after a real sensor is observed. |
+| `temperature` | Highest observed sensor temperature, °C. Appears only after a real sensor is reported. |
 | `network_receive` | Receive rate, bytes per second (`B/s`). |
 | `network_transmit` | Transmit rate, bytes per second (`B/s`). |
 | `uptime` | Uptime, seconds. |
-| `last_sample` | The source sample's timestamp. |
+| `last_sample` | Source sample timestamp. |
 
-Missing or stale telemetry stays unavailable. Selecting a metric does not create support for a sensor that the Hub has never reported.
+Missing or stale readings are unavailable. Freshness uses the Hub's source sample time, so polling more often does not make old data fresh. HA history starts when entities report. Older history stays in Beszel. Container, GPU, S.M.A.R.T. and extra filesystem entities are not available.
 
-A confirmed `down` system has connectivity off. Paused/pending systems do not claim an active connection. Hub outages make readings unavailable while the Bridge's liveness watchdog remains healthy.
+Renaming a server or changing the same Hub's URL preserves its devices. HA entity customizations also survive restarts. Excluded systems are removed at the next successful sync. Inaccessible systems are removed after five minutes of successful inventory checks. Failed checks do not remove devices.
 
-Identity uses the Hub's public SSH key and stable system ID. Renaming servers, changing the same Hub's URL and HA entity customization preserve identity. Explicit exclusions remove discovery immediately. Inaccessible systems have a five-minute grace period after complete successful inventories. Failed inventories never delete devices.
-
-HA history starts when entities report. Older history remains in Beszel. Container, GPU, S.M.A.R.T. and extra filesystem entities are deferred.
-
-## Diagnostics and recovery
-
-Run these commands inside the Bridge app container:
-
-```sh
-/usr/local/bin/bridge status
-/usr/local/bin/bridge check
-/usr/local/bin/bridge health
-```
-
-`status` reports redacted readiness. `check` authenticates and lists selected systems, source times and freshness without publishing. `health` checks process liveness. Logs omit passwords, tokens and API response bodies. Redact exported system names/IDs before sharing.
+## Troubleshooting
 
 | Problem | Check |
 | --- | --- |
-| Hub connection/TLS | URL, internal hostname, base path, network and CA |
-| Login/no systems | Normal account, password login, shared systems and filters |
-| MQTT service unavailable | Broker app service or manual settings |
-| Missing HA entities | Same broker, discovery prefix and successful sync |
-| Unavailable readings | Agent status, source freshness and Hub connection |
-| Unsupported version | Verified Hub version and compatibility policy |
+| Hub connection or TLS error | Direct URL, base path, network access and CA file. |
+| Login fails or no systems appear | Use a normal account with a password and shared systems. Check filters. |
+| MQTT service unavailable | Start the broker app or choose manual settings. |
+| Missing Home Assistant entities | Use the same broker and discovery prefix as Home Assistant, then check for a successful sync. |
+| Unavailable readings | Check the Agent, Hub connection and age of the source sample. |
+| Unsupported Hub version | Use a version listed in Requirements. |
 
-![Hub outage with Bridge connected and readings unavailable](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/overview-unavailable-desktop.webp)
+The Bridge's Watchdog checks its process and can remain healthy during Hub or broker outages. Check the log and connection diagnostics for those failures.
 
-The Bridge publishes no host port. Its internal port `8099` serves `/health` and redacted `/status` for app diagnostics. A healthy Watchdog confirms process liveness even while the Hub or MQTT broker is unreachable.
+![Hub outage with unavailable readings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/overview-unavailable-desktop.webp)
 
-Include the app in Home Assistant backups to preserve its `/data` identity and owned discovery topics. A process lock prevents concurrent state access.
+For container commands, see [advanced diagnostics](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/TESTING.md#bridge-diagnostics). Remove system names, IDs and credentials before sharing diagnostics.
 
-### Clean up or replace a Hub/broker
+## Clean up or replace a Hub/broker
 
-Before uninstalling, switching brokers/prefixes, replacing the Hub or rotating its SSH key:
+Before uninstalling, switching brokers or discovery prefixes, replacing the Hub or rotating its SSH key:
 
-1. Retain the original Hub/broker settings. Temporarily disable Watchdog and automatic start.
-2. Set `cleanup: true`, save and restart. Confirm scoped discovery/availability removal in the log.
-3. Set `cleanup: false`, apply new settings, start the app and restore Watchdog/automatic start.
+1. Keep the original Hub and broker settings. Temporarily disable Watchdog and automatic start.
+2. Set `cleanup: true`, save and restart. Confirm removal of this Bridge's MQTT discovery entries in the log.
+3. Set `cleanup: false`, apply any new settings and start the app. Restore Watchdog and automatic start if continuing to use it.
 
-If the old broker is offline, preserve its configuration and `/data`, then retry. Deleting app data first can leave retained discovery behind. Cleanup must preserve unrelated topics.
-
-## Development installation before images are published
-
-Copy `beszel_bridge` into HA's local apps directory and remove `image:` from that local copy so Supervisor builds it. Keep the repository manifest unchanged. Complete the [manual HA OS checklist](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/MANUAL_CHECKLIST.md) before release. Publishing remains blocked by `release_ready: false`.
+If the old broker is offline, keep its settings and app data, then retry cleanup later. Include the app in Home Assistant backups. Deleting its data first can leave old MQTT entities behind.

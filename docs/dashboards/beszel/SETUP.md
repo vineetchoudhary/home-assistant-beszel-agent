@@ -1,6 +1,6 @@
 # Beszel dashboard setup
 
-Use the [overview](server-overview.yaml) or [detail](server-detail.yaml) template after [Bridge setup](../../../beszel_bridge/DOCS.md). Both use standard HA cards.
+Complete [Bridge setup](../../../beszel_bridge/DOCS.md) and confirm its MQTT devices first. Choose the [overview](server-overview.yaml) or [detail](server-detail.yaml) template. Both use standard Home Assistant cards.
 
 ## Add a dashboard
 
@@ -14,7 +14,7 @@ Open the server under **Settings > Devices & services > MQTT**. Select a sensor,
 
 ### 2. Create an empty dashboard
 
-Open **Settings > Dashboards > Add dashboard > New dashboard from scratch**. Enter a title and URL containing a hyphen and no spaces. Keep **Add to sidebar** enabled and choose **Create**.
+Open **Settings > Dashboards > Add dashboard > New dashboard from scratch**. Enter a title and a URL path such as `beszel-servers`, enable **Add to sidebar** and choose **Create**.
 
 ![Dashboard settings](../../screenshots/beszel-bridge/09-dashboard-settings.webp)
 
@@ -28,25 +28,25 @@ Open the dashboard, choose **Edit dashboard**, then **⋮ > Raw configuration ed
 
 ### 4. Paste a template and replace its placeholders
 
-Paste a complete template and replace all server and Bridge entity placeholders with the actual IDs. In the detail template, replace `BESZEL_HUB_URL` with the Hub's browser address. To include both views, combine their items under one `views:` list.
+Paste one complete template. Replace every example ID beginning with `sensor.beszel_server`, `binary_sensor.beszel_server`, `sensor.beszel_bridge` or `binary_sensor.beszel_bridge` with the matching Entity ID from step 1. In the detail template, replace `BESZEL_HUB_URL` with your Hub's web address.
+
+To use both views, copy the view entries from the second template into the first template's `views:` list. Keep a single `title:` and `views:` at the top level.
 
 ![Template with actual entity IDs](../../screenshots/beszel-bridge/12-dashboard-yaml.webp)
 
 ### 5. Save and check the readings
 
-Choose **Save**, close the editor and choose **Done**. Verify readings and connection indicators. Importing both views adds **Servers** and **Server detail** tabs.
+Choose **Save**, close the editor and choose **Done**. Check that readings appear. If you combined both templates, you will see **Servers** and **Server detail** tabs.
 
 ![Saved dashboard](../../screenshots/beszel-bridge/13-dashboard-ready.webp)
 
 ## Adjust the dashboard
 
-Duplicate card groups for additional servers and substitute their IDs. HA may change suggested IDs after collisions or renaming. Keep your own edits after import.
+For more servers, copy a card group and replace its Entity IDs. Always use IDs from Home Assistant because renaming or name collisions can change them.
 
-Remove unsupported or disabled metrics. Add Temperature after the Bridge observes a sensor. Network history requires rate entities. History starts with HA collection, while older data stays in Beszel. Outages show unavailable readings, as in the [Hub outage example](../../../beszel_bridge/DOCS.md#diagnostics-and-recovery).
+Remove readings you have disabled or your hardware does not report. History starts when Home Assistant receives data. Older history stays in Beszel. If readings show **Unavailable**, check the [Bridge troubleshooting guide](../../../beszel_bridge/DOCS.md#troubleshooting).
 
-## Dashboard previews
-
-Real HA Core 2026.10.1 and Beszel 0.21.0 captures. See [capture notes](../../SCREENSHOTS.md#bridge-and-dashboard-captures).
+## Dashboard examples
 
 ### Server overview
 

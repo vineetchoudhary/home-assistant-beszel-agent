@@ -192,7 +192,7 @@ jobs:
           import json
           policy = json.load(open('beszel_bridge/compatibility.json'))
           if policy.get('release_ready') is not True:
-              raise SystemExit('Bridge publishing is disabled until real HA OS/Supervisor acceptance is recorded. Complete docs/MANUAL_CHECKLIST.md and docs/BRIDGE_READINESS.md, then set release_ready to true. Full releases include the Bridge and are also blocked; individual existing-app rebuilds remain available.')
+              raise SystemExit('Bridge publishing is disabled until real HA OS/Supervisor acceptance is recorded. Complete docs/MANUAL_CHECKLIST.md, record the results in the release change, then set release_ready to true. Full releases include the Bridge and are also blocked; individual existing-app rebuilds remain available.')
           PY
           chmod +x scripts/test-bridge.sh
           ./scripts/test-bridge.sh --hub-version "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"

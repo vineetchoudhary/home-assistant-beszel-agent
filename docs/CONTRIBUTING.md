@@ -8,6 +8,8 @@ Search [app issues](https://github.com/vineetchoudhary/home-assistant-beszel-age
 
 - Match the existing code style and update affected documentation.
 - Keep READMEs focused on purpose and quick setup. Link to detailed guides for advanced topics.
-- Each app's `DOCS.md` appears inside Home Assistant. Keep its setup instructions and every configuration option self-contained, including defaults, examples and app-specific requirements. Link to the main documentation for further detail.
+- Each app's `DOCS.md` appears inside Home Assistant. Keep setup, configuration options, defaults, examples and app-specific requirements self-contained.
 - Keep each Markdown paragraph and list item on one physical line without wrapping sentences. Do not use em dashes or semicolons.
-- Run the relevant [tests](TESTING.md). Verify changed configuration and app behavior in Home Assistant where applicable.
+- Run the relevant [tests](TESTING.md) and verify changed app behavior in Home Assistant.
+
+For development details, see [architecture](ARCHITECTURE.md), [HA OS release checks](MANUAL_CHECKLIST.md) and [publishing](RELEASE.md).

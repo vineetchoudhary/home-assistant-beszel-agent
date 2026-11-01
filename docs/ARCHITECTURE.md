@@ -18,6 +18,8 @@ flowchart LR
 
 Agent/Hub images use Alpine except NVIDIA, which uses Debian for injected glibc tools and the amd64 NVML build. Intel is amd64-only because `intel_gpu_top` is unavailable on aarch64. See [app variants](APPS.md).
 
-The Bridge uses a normal Hub account, read-only `/ssl`, normal container networking and no published port or hardware privileges. [Compatibility policy](../beszel_bridge/compatibility.json) selects verified Hub schemas. Source timestamps control freshness, while the Hub's public SSH key and system ID define identity. Discovery is retained, live readings are not, and liveness is independent of upstream readiness.
+The Bridge reads the Hub using a normal account and the versions listed in its [compatibility policy](../beszel_bridge/compatibility.json). It uses read-only `/ssl` and normal container networking, with no published port or hardware privileges.
 
-Hub backups stop the server for SQLite consistency. Bridge backups preserve identity and owned topics. See [Hub configuration](../beszel_hub/DOCS.md), [Bridge setup](../beszel_bridge/DOCS.md) and pending [release gates](BRIDGE_READINESS.md).
+The Hub's public SSH key and system IDs identify MQTT devices. Discovery messages are retained, live readings expire using source timestamps, and Watchdog checks the Bridge process separately from Hub/MQTT connectivity.
+
+Hub backups stop the server for SQLite consistency. Bridge backups preserve identity and owned topics. See [Hub configuration](../beszel_hub/DOCS.md) and [Bridge setup](../beszel_bridge/DOCS.md).

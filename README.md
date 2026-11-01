@@ -1,8 +1,8 @@
 # Beszel for Home Assistant
 
-Run [Beszel](https://github.com/henrygd/beszel) Hub and Agent apps in Home Assistant to monitor your system and other hosts.
+Monitor Home Assistant and other machines with [Beszel](https://github.com/henrygd/beszel). Run a Hub to view readings and an Agent on each monitored host.
 
-![Beszel repository in the Home Assistant app store, showing the Hub and five Agent variants](docs/screenshots/beszel-apps.jpg)
+![Beszel Hub and five Agent variants in the Home Assistant app store, arranged in two rows of three](docs/screenshots/beszel-apps.jpg)
 
 ## Quick installation
 
@@ -10,11 +10,11 @@ Add this repository with the button below, or paste `https://github.com/vineetch
 
 [![Open Home Assistant and add this app repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/vineetchoudhary/home-assistant-beszel-agent)
 
-1. Use your existing Hub, or install and start **Beszel Hub**, then create an account at `http://<home-assistant-host>:8090`.
+1. Use an existing Hub, or [set up Beszel Hub](beszel_hub/DOCS.md) and create its first account.
 2. Install **Beszel Agent**. In the Hub, choose **Add System**, copy its public key and token into the Agent's `key` and `token` options, and set `hub_url` to your Hub's address.
 3. Save and start the Agent, then check the Hub for live metrics.
 
-For screenshots and advanced options, see the [installation guide](docs/INSTALLATION.md).
+See the [illustrated installation guide](docs/INSTALLATION.md) for the full setup.
 
 ## Beszel Bridge
 
@@ -25,8 +25,6 @@ For screenshots and advanced options, see the [installation guide](docs/INSTALLA
 ## Documentation
 
 - [App selection and configuration](docs/APPS.md)
-- [Home Assistant entities and dashboards](beszel_bridge/DOCS.md) (unreleased Bridge preview)
-- [Contributing](docs/CONTRIBUTING.md) · [Testing](docs/TESTING.md) · [Architecture](docs/ARCHITECTURE.md)
-- [Releases](docs/RELEASE.md) · [Manual HA OS checks](docs/MANUAL_CHECKLIST.md)
+- [Home Assistant dashboard setup](docs/dashboards/beszel/SETUP.md)
 
-[Report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) · [MIT license](LICENSE)
+[Report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) · [Contributing](docs/CONTRIBUTING.md) · [MIT license](LICENSE)

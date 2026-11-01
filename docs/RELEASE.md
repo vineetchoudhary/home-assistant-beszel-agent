@@ -1,12 +1,12 @@
-# Releases
+# Publishing releases
 
-The [publish workflow](../.github/workflows/publish.yml) supports these paths:
+Use the [Build and Publish workflow](../.github/workflows/publish.yml) to publish app images and GitHub releases.
 
 | Trigger | Behavior |
 | --- | --- |
-| Scheduled, every 8 hours | Check upstream, update app versions/binary pins, publish images, commit changes and create a tag/release. Skip when already current. |
-| Tag `vX.Y.Z` or `vX.Y.Z.W` | Build all apps with the tag's app version and existing Beszel pins. |
-| Manual **Build and Publish** | Choose an app or `all`. Single-app rebuilds run even at the same version and create no tag/release. Use `force_rebuild` for an unchanged `all` build. |
+| Scheduled, every 8 hours | Check upstream, update versions and pins, publish images and create a release. Skip when current. |
+| Tag `vX.Y.Z` or `vX.Y.Z.W` | Build all apps using the tag's version and existing Beszel pins. |
+| Manual run | Choose an app or `all`. Single-app rebuilds create no release. Use `force_rebuild` for an unchanged `all` build. |
 
 ## Manual build choices
 
@@ -19,29 +19,25 @@ The [publish workflow](../.github/workflows/publish.yml) supports these paths:
 | `amd` | `beszel_agent_amd` |
 | `nvidia` | `beszel_agent_nvidia` |
 | `hub` | `beszel_hub` |
-| `bridge` | `beszel_bridge`, subject to its release gate |
+| `bridge` | `beszel_bridge` |
 
-Add new apps to the workflow's build-helper table and dispatch choices. Publish their images before advertising installation: unchanged versions can make scheduled runs skip them.
+When adding an app, update the workflow's build helpers and choices. Publish its images before advertising installation because unchanged versions can make scheduled runs skip it.
 
-## Version numbers
+## Versions and architectures
 
-All apps share the version from `beszel_agent/config.yaml`. Their `config.yaml`, image tags and release tag must agree. The six bundled apps pin upstream binaries in `beszel_version`. Automatic releases update both versions, while tag releases retain those binary pins.
+The workflow uses `beszel_agent/config.yaml` as its app-version reference. Keep all app versions, image tags and the release tag aligned. The six Hub/Agent apps pin upstream binaries in `beszel_version`. Automatic releases update both versions. Tag releases keep existing binary pins.
 
-The Bridge has no bundled Beszel binary or `beszel_version` file. Its [compatibility policy](../beszel_bridge/compatibility.json) separately declares supported Hub schemas.
+The Bridge has no bundled Beszel binary. Its [compatibility policy](../beszel_bridge/compatibility.json) lists supported Hub versions.
 
-## Bridge release gate
+Images use one multi-architecture manifest without an `-{arch}` suffix. Intel is amd64-only. Other images support amd64/arm64. NVIDIA uses the Debian base. The workflow tests a local amd64 image before publishing.
 
-Full and Bridge-only publishing are blocked by `release_ready: false` before version changes or registry login. Individual existing-app rebuilds remain available.
+## Bridge release checks
 
-1. Complete and record the [manual HA OS checks](MANUAL_CHECKLIST.md) and [readiness results](BRIDGE_READINESS.md) for both Hub locations.
-2. For new Hub schemas, capture sanitized fixtures and verify units, source timestamps and real HA entity behavior before updating compatibility.
-3. Set `release_ready: true` in the reviewed release change. Keep `stage: experimental` during preview.
-4. Publishing still runs both Bridge test scripts against the candidate Hub version. Unsupported schemas fail. Verify both architecture image tags and public pull/install before claiming availability.
+1. Complete the [HA OS checklist](MANUAL_CHECKLIST.md) for local and remote Hubs. Record tested versions, platforms and results in the release change.
+2. For a new Hub version, capture sanitized fixtures and verify units, source timestamps and Home Assistant entities before changing compatibility.
+3. After validation, set `release_ready: true` in [compatibility.json](../beszel_bridge/compatibility.json) as part of the reviewed release change.
+4. The workflow runs both Bridge test scripts against the candidate Hub version. Verify published image tags and installation on both architectures before announcing availability.
 
-## Images and Architectures
+## Renaming an image
 
-Each app publishes one image manifest without an `-{arch}` suffix. Intel is amd64-only, NVIDIA uses Debian, and other supported images cover amd64/arm64. Smoke tests load a single amd64 image locally before publication. See [local build commands](TESTING.md#building-a-multi-arch-image-locally).
-
-### Migrating an image name
-
-Publish the new image for every supported architecture, then bump the app version so Supervisor notices the change. Slugs preserve options/data. Keep old image packages available for installations that may repair or rebuild before updating.
+Publish the new image for every supported architecture, then bump the app version so Home Assistant detects the change. Keep the app slug unchanged to preserve options and data. Retain old image packages for existing installations that need repairs or rebuilds.

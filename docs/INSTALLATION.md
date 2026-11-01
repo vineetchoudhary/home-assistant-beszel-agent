@@ -1,147 +1,58 @@
-# Beszel installation and setup
+# Install Beszel in Home Assistant
 
-Choose a variant in the [app guide](APPS.md). These steps cover Agents, with Hub setup in step 8. For the development preview, use the [Bridge guide](../beszel_bridge/DOCS.md).
+These apps require Home Assistant's app store. Choose the [Agent variant](APPS.md) for your hardware. To bring Hub readings into Home Assistant, follow the [Bridge setup guide](../beszel_bridge/DOCS.md).
 
-Older screenshots use **Add-ons**, now called **Apps**. See [capture notes](SCREENSHOTS.md).
+## 1. Add the repository
 
-## 1. Open Home Assistant Apps
+Open **Settings > Apps > Install app > ⋮ > Repositories**, choose **Add** and enter:
 
-Open **Settings > Apps**.
+```text
+https://github.com/vineetchoudhary/home-assistant-beszel-agent
+```
 
-![Home Assistant Settings](screenshots/1-ha-settings.webp)
+![Open Apps in Home Assistant Settings](screenshots/1-ha-settings.webp)
 
-## 2. Open the App store
+Return to the app store to see the Beszel apps:
 
-Choose **Install app**.
+![Beszel Hub and Agent variants](screenshots/beszel-apps.jpg)
 
-![Install app](screenshots/2-ha-apps.webp)
+## 2. Set up a Hub
 
-## 3. Open App Store Repositories
+Skip this if you already have a Beszel Hub. Otherwise, install **Beszel Hub**, set `app_url` to `http://<home-assistant-ip>:8090`, save and start it. Open that URL and create the first account.
 
-Open the three-dot menu and choose **Repositories**.
+Replace `<home-assistant-ip>` with the address shown under **Settings > System > Network**. For Ingress, reverse proxies and automatic login, see [Hub configuration](../beszel_hub/DOCS.md).
 
-![Repositories menu](screenshots/3-ha-apps-store-repo.webp)
+## 3. Configure an Agent
 
-## 4. Add Custom Repository
-
-Add `https://github.com/vineetchoudhary/home-assistant-beszel-agent`.
-
-![Add repository](screenshots/4-ha-apps-add-repo.webp)
-
-## 5. Confirm Repository Added
-
-Select an app from the repository. See [app differences and requirements](APPS.md).
-
-![Repository added](screenshots/5-ha-apps-repo-added.webp)
-
-![Standard Agent](screenshots/5-beszel-agent-home-assistant.webp)
-
-![S.M.A.R.T. Agent](screenshots/5-beszel-agent-smart-home-assistant.webp)
-
-## 6. Install a Beszel App
-
-Open the app and choose **Install**.
-
-![Install the Agent](screenshots/6-ha-beszel-agenet-install.webp)
-
-## 7. Open App Configuration
-
-Open **Configuration** after installation.
-
-![Configuration tab](screenshots/7-ha-beszel-agenet-config.webp)
-
-## 8. Fill in Required Configuration
-
-**Hub:** start with defaults, open `http://<home-assistant-host>:8090` and create the first account. See [Hub options](../beszel_hub/DOCS.md) for `app_url`, Ingress and authentication.
-
-**Agent:** in your Hub, choose **Add System** and copy the public key and token. Enter those values and the Hub's reachable URL:
+Install your chosen Agent variant. In the Hub, choose **Add System** and copy the complete public key and token into the Agent's **Configuration**. Set `hub_url` to the Hub's direct address, including any port and base path. If the Hub asks for the monitored host, use Home Assistant's IP address and port `45876`.
 
 ```yaml
-key: "your-hub-public-key"
+key: "ssh-ed25519 REPLACE_WITH_YOUR_HUB_PUBLIC_KEY"
 hub_url: "http://192.168.1.100:8090"
-token: "your-secret-token"
+token: "replace-with-system-token"
 ```
 
-![Hub Add System dialog](screenshots/8-beszel-config.webp)
+Replace `192.168.1.100` with the Hub host's IP address. Home Assistant Ingress URLs cannot be used as `hub_url`.
 
-![Agent connection options](screenshots/8-ha-beszel-agenet-config-fill.webp)
+![Public key and token in the Hub's Add System dialog](screenshots/8-beszel-config.webp)
 
-## 9. (Optional) Configure Custom Environment Variables and Volumes
+Before starting, set **Protection mode** for the metrics you need. Disabling it grants the app broader host access.
 
-### Environment variables
-
-Use `environment_vars` for [upstream Agent options](https://www.beszel.dev/guide/environment-variables#agent):
-
-```yaml
-environment_vars:
-  - name: LOG_LEVEL
-    value: "debug"
-  - name: SMART_DEVICES
-    value: "/dev/nvme0:nvme,/dev/sda:sat"
-```
-
-### Self-signed certificates
-
-Agents verify HTTPS certificates. For a private or self-signed CA, copy its PEM certificate into HA's `/ssl` folder, mounted read-only by the app:
-
-```yaml
-hub_url: "https://beszel.example.com"
-environment_vars:
-  - name: CA_CERT_FILE
-    value: "/ssl/beszel-ca.crt"
-```
-
-An unreadable or invalid CA file stops startup with a `CA_CERT_FILE` error and can cause watchdog restarts. Leave this option unset for HTTP or publicly trusted HTTPS.
-
-### Custom volume checks
-
-```yaml
-custom_volumes:
-  - host_path: "/mnt/data"
-    container_path: "/mnt/data:ro"
-```
-
-**This option only checks existing paths inside the app.** It cannot mount arbitrary host directories. Home Assistant controls the app's mounts through `config.yaml`.
-
-![Custom volume checks](screenshots/9-ha-beszel-agenet-custom-volumes.webp)
-
-## 10. Start the App
-
-Save the configuration, open **Info** and choose **Start**.
-
-![Start the Agent](screenshots/10-ha-beszel-agenet-install-success.webp)
-
-## 11. Observe App Running
-
-Check the app status and logs for connection errors or detected disks.
-
-![Running Agent](screenshots/11-ha-beszel-agenet-start.webp)
-
-![S.M.A.R.T. startup log](screenshots/11-beszel-agent-smart-log.webp)
-
-| Port | Purpose |
+| Metrics | Protection mode |
 | --- | --- |
-| `45876` | Agent connection from the Hub |
-| `45877` | Agent watchdog healthcheck |
-| `8090` | Hub web UI, API and watchdog |
+| Basic system metrics or AMD GPU usage | Can remain enabled. |
+| Home Assistant app statistics or S.M.A.R.T. disk health | Disable. |
+| Intel Arc/Xe GPU usage | Disable. Older i915 GPUs may work with it enabled. |
+| NVIDIA GPU usage | Requires a [specially configured host](../beszel_agent_nvidia/DOCS.md#nvidia-host-requirements). Unavailable on HA OS. |
 
-## 12. (Optional) Disable Protection Mode
+## 4. Start and verify
 
-Disable Protection mode for Docker app statistics, S.M.A.R.T. and Intel Arc/Xe monitoring. Basic `/dev/dri` access works in either mode. Disabling protection grants broader host access, so use it only for trusted apps.
+Save the configuration, open **Info** and choose **Start**. Check the **Log** tab for errors and confirm live readings in the Hub. Save and restart the app after changing configuration.
 
-![Protection mode](screenshots/12-ha-beszel-agenet-protection-mode.webp)
+![Live readings in Beszel Hub](screenshots/13-beszel-dashboard.webp)
 
-## 13. Verify Metrics in Beszel Hub
+## Optional settings and troubleshooting
 
-Open the Hub and confirm live readings and, where supported, disk health.
+Use the [app's configuration guide](APPS.md) for private HTTPS certificates, environment variables, disk selection and GPU settings. `custom_volumes` only checks existing paths inside an app and cannot mount host directories.
 
-![Hub metrics](screenshots/13-beszel-dashboard.webp)
-
-![Disk health](screenshots/13-beszel-smart.webp)
-
-## Troubleshooting
-
-- Check app logs first. For watchdog failures, check the Agent health endpoint on `45877` or the Hub's published port `8090`.
-- For `CA_CERT_FILE` errors, verify the PEM file exists under `/ssl` and the option matches its path.
-- For missing temperatures, check visibility of `/sys/class/hwmon/hwmon*/temp*_input` and `/sys/class/thermal/thermal_zone*/temp`.
-- For GPU limitations, use the [variant guide](APPS.md). Report unresolved problems with versions and redacted logs in a [GitHub issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues).
+If readings are missing, check the Hub URL, key, token and both apps' logs. Stop other Agent variants before starting one because they share ports. For unresolved problems, [report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) with app/HA versions and logs with credentials removed.

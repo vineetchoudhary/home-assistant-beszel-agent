@@ -1,22 +1,20 @@
 # Beszel Agent (AMD GPU)
 
-Monitor CPU, memory, disk, network and Home Assistant app usage, plus AMD GPU metrics and S.M.A.R.T. disk health, in your Beszel Hub. This variant includes the AMD GPU name database, nvtop and smartmontools.
+Monitor system metrics, AMD GPU usage and S.M.A.R.T. disk health in Beszel.
 
 ## Requirements
 
-Supports **amd64 and aarch64**. Use an existing Beszel Hub on this Home Assistant host or another machine. AMD GPU statistics come from `/sys/class/drm` and generally work with Protection mode enabled. **Disable Protection mode** for S.M.A.R.T. disk access and Docker app statistics.
+Supports 64-bit Intel/AMD (**amd64**) and ARM (**aarch64**). AMD GPU metrics generally work with Protection mode enabled. Disable it for disk health and Home Assistant app statistics.
 
 ## Setup
 
-1. Add this repository and install **Beszel Agent (AMD GPU)** from the Home Assistant app store. The [installation guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) includes screenshots.
-2. Open your existing Hub, or install and start **Beszel Hub** and create its first account at `http://<home-assistant-host>:8090`.
-3. In the Hub, choose **Add System**. Copy its public key and token into this app's **Configuration**, then set `hub_url` to the Hub's reachable URL. Use this Home Assistant host's address and Agent port `45876` if the Hub asks for the monitored system's host and port.
-4. Apply the Protection mode requirements above. Save the configuration and start the app. Save and restart after later configuration changes.
-5. Check the app's **Log** for errors and confirm that the system reports live readings in the Hub.
+1. [Add this repository](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md#1-add-the-repository) and install **Beszel Agent (AMD GPU)**. Use an existing Beszel Hub or install [Beszel Hub](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/beszel_hub/DOCS.md) first.
+2. In the Hub, choose **Add System**. Copy its public key and token into the app's **Configuration**, then set `hub_url` to the Hub's address. If asked for the monitored host, use Home Assistant's IP address and port `45876`.
+3. Set Protection mode as described above, save and start the app. Confirm live readings in the Hub. Save and restart after configuration changes.
 
 ## Configuration
 
-Every option available in the app configuration is listed below. Replace the three connection values in this example. Leave the optional lists empty until you need them.
+Replace the public key and token with the complete values from **Add System**. Replace `192.168.1.100` with your Hub's IP address.
 
 ```yaml
 key: "ssh-ed25519 REPLACE_WITH_YOUR_HUB_PUBLIC_KEY"
@@ -28,24 +26,17 @@ custom_volumes: []
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| `key` | Empty, required | The complete SSH public key from the Hub's **Add System** dialog. Keep the `ssh-` prefix and key contents. This is a public key, even though Home Assistant masks the field. |
-| `hub_url` | Empty, required | The Hub's HTTP or HTTPS address, including its port and any configured base path. For the Hub app, use `http://<home-assistant-host>:8090`. Use the direct Hub address rather than the Home Assistant UI or an Ingress URL. |
-| `token` | Empty, required | The Agent registration token from the Hub's **Add System** dialog. This is a secret and is separate from the SSH public key or a Home Assistant access token. |
-| `environment_vars` | `[]` | Optional list of additional Beszel Agent environment variables. Each entry requires `name` and `value`, described below. |
-| `custom_volumes` | `[]` | Optional list of path checks. Each entry requires `host_path` and `container_path`. This option cannot create mounts. |
+| `key` | `""`, required | Hub's complete SSH public key, including its `ssh-` prefix. |
+| `hub_url` | `""`, required | Direct HTTP or HTTPS Hub URL, including its port and any base path. Home Assistant Ingress URLs do not work here. |
+| `token` | `""`, required | Secret registration token from **Add System**. |
+| `environment_vars` | `[]` | Optional Beszel settings, supplied as `name` and `value` pairs. |
+| `custom_volumes` | `[]` | Optional checks for paths already visible inside the app. Leave empty for normal use. |
 
-The app refuses to start if `key`, `hub_url` or `token` is empty. Keep these connection settings in their dedicated fields.
+## Advanced options
 
-## Shared options
+### Environment variables
 
-### `environment_vars`
-
-Use this list for supported [Beszel Agent environment variables](https://www.beszel.dev/guide/environment-variables#agent). Merge all optional entries into one list rather than repeating the `environment_vars` key.
-
-| Entry field | Requirement |
-| --- | --- |
-| `name` | A nonempty variable name matching `[A-Za-z_][A-Za-z0-9_]*`, such as `LOG_LEVEL`. |
-| `value` | A nonempty string. Quote numbers and booleans, such as `"30"` and `"true"`. |
+Add [Beszel Agent variables](https://www.beszel.dev/guide/environment-variables#agent) to one `environment_vars` list. Each entry needs a `name` and a nonempty `value`. Quote numbers and booleans. Invalid entries are skipped with a warning.
 
 ```yaml
 environment_vars:
@@ -53,31 +44,21 @@ environment_vars:
     value: "debug"
 ```
 
-Entries with empty fields or invalid names are skipped with a warning. Values are stored in app options and may be included in Home Assistant backups, so handle credentials accordingly.
+### Private HTTPS certificates
 
-### Private CA certificates
-
-For an HTTPS Hub with a private or self-signed CA, put its PEM CA certificate in Home Assistant's `/ssl` folder, which this app mounts read-only. Add `CA_CERT_FILE` to your existing `environment_vars` list:
+For a Hub with a private or self-signed CA, copy its PEM CA certificate into Home Assistant's `/ssl` folder and add this entry to `environment_vars`:
 
 ```yaml
-hub_url: "https://beszel.example.com"
 environment_vars:
   - name: CA_CERT_FILE
     value: "/ssl/beszel-ca.crt"
 ```
 
-Keep your `key` and `token` configured. The certificate must match the Hub's certificate chain and hostname. An unreadable file or a file without a valid PEM certificate stops startup with a `CA_CERT_FILE` error. Leave the variable unset for plain HTTP or publicly trusted HTTPS.
+Keep the Hub's HTTPS URL, key and token configured. Certificate and hostname verification remain enabled. An unreadable or invalid CA file stops startup. Leave `CA_CERT_FILE` unset for HTTP or publicly trusted HTTPS.
 
-### `custom_volumes`
+### Custom volume checks
 
-This option checks whether paths are already visible inside the app. **It does not mount host directories or grant disk access.** Home Assistant controls mounts through the app's declared mappings and device permissions.
-
-| Entry field | Requirement |
-| --- | --- |
-| `host_path` | A nonempty descriptive source path used in the startup log. The app does not mount or check this host path. |
-| `container_path` | The nonempty path to check inside the app. A final `:ro` or `:rw` is stripped for the check and does not change access permissions. |
-
-This example checks the `/ssl` mapping that the app already provides:
+**`custom_volumes` does not mount directories or grant disk access.** It only reports whether `container_path` exists inside the app. `host_path` is a label in the startup log. Both fields must be nonempty. The optional `:ro` or `:rw` suffix is ignored during the check.
 
 ```yaml
 custom_volumes:
@@ -85,16 +66,14 @@ custom_volumes:
     container_path: "/ssl:ro"
 ```
 
-Missing paths produce warnings. Leave `custom_volumes: []` for normal operation.
-
 ## AMD GPU configuration
 
-Collector selection is automatic. Add these optional variables to the same `environment_vars` list when you need an override:
+GPU detection is automatic. To override it, add these variables to `environment_vars`:
 
-| Variable | Setting |
+| Variable | Value |
 | --- | --- |
-| `GPU_COLLECTOR` | `amd_sysfs` or `nvtop`. Omit to use automatic selection. |
-| `SKIP_GPU` | Set to `"true"` to disable GPU monitoring. Omit for normal GPU detection. |
+| `GPU_COLLECTOR` | `amd_sysfs` or `nvtop`. |
+| `SKIP_GPU` | `"true"` to disable GPU monitoring. |
 
 ```yaml
 environment_vars:
@@ -102,13 +81,11 @@ environment_vars:
     value: "amd_sysfs"
 ```
 
-`amd_sysfs` reads the host's AMD GPU data directly. The app includes `amdgpu.ids` for readable card names and `nvtop` as an alternative collector. The deprecated `rocm-smi` collector is not bundled. Check the startup log for detected `amdgpu` cards. See the [upstream GPU guide](https://beszel.dev/guide/gpu) for collector details.
+See the [GPU guide](https://beszel.dev/guide/gpu) for collector details.
 
 ## S.M.A.R.T. configuration
 
-SATA/SAS (`/dev/sd*`) and NVMe (`/dev/nvme*`) disks are detected automatically. **Protection mode must be disabled** for disk access. Check the startup log for `smartctl` and the detected drives.
-
-To select devices explicitly or supply a device type, add `SMART_DEVICES` to the existing `environment_vars` list. Replace these paths and types with those for your disks:
+SATA/SAS and NVMe disks are detected automatically. Check the startup log for detected drives. To select disks or specify device types, add this to your existing `environment_vars` list, using your own device paths:
 
 ```yaml
 environment_vars:
@@ -116,29 +93,28 @@ environment_vars:
     value: "/dev/nvme0:nvme,/dev/sda:sat"
 ```
 
-Leave this variable unset for automatic detection. See the [upstream S.M.A.R.T. guide](https://beszel.dev/guide/smart-data) for device-type details.
+Leave `SMART_DEVICES` unset for automatic detection. See the [S.M.A.R.T. guide](https://beszel.dev/guide/smart-data) for device types.
 
-## Ports, watchdog and storage
+## Ports and backups
 
 | Port | Purpose |
 | --- | --- |
-| `45876/tcp` | Agent SSH listener, used when the Hub connects to this Agent. |
-| `45877/tcp` | Home Assistant Watchdog endpoint at `/cgi-bin/health`. The helper starts only when Watchdog is enabled. |
+| `45876/tcp` | Agent connection from the Hub. |
+| `45877/tcp` | Home Assistant Watchdog, when enabled. |
 
-The app uses host networking. Stop another Agent variant before starting this one so their listeners do not conflict. The watchdog helper always binds port `45877` and cannot be moved through app options. If that port is occupied, disable **Watchdog** on the app's **Info** tab and restart the app.
-
-Home Assistant provides persistent app storage at `/var/lib/beszel-agent`. Include the app in Home Assistant backups to preserve its state.
+Run only one Agent variant at a time because they share ports. Include the app in Home Assistant backups. Keep credentials private when sharing configuration or logs.
 
 ## Troubleshooting
 
 | Problem | Check |
 | --- | --- |
-| Required configuration error | Fill in all three connection fields, then save and start again. |
-| Hub does not receive readings | Check the Hub URL, public key, token, network reachability and both the Agent and Hub logs. |
-| HTTPS or `CA_CERT_FILE` errors | Check the Hub hostname, PEM CA file and its `/ssl` path. |
-| Missing Home Assistant app statistics | Disable Protection mode to allow Docker API access. |
-| Missing AMD GPU readings | Check the startup log for detected `amdgpu` cards and verify that any `GPU_COLLECTOR` override is `amd_sysfs` or `nvtop`. |
-| Missing disk health | Disable Protection mode, check detected drives and verify any `SMART_DEVICES` paths and types. |
-| Repeated Watchdog restarts | Check the log for a port `45877` conflict or startup error. Disable Watchdog and restart if another service needs that port. |
+| App will not start | Fill in `key`, `hub_url` and `token`, then check the app's Log tab. |
+| No readings in the Hub | Check the Hub URL, public key, token and network connection. |
+| HTTPS or `CA_CERT_FILE` error | Check the Hub hostname, PEM CA file and its `/ssl` path. |
+| Missing app statistics | Disable Protection mode. |
+| Missing temperatures | Check whether the host exposes sensors under `/sys/class/hwmon` or `/sys/class/thermal`. |
+| Missing GPU readings | Check for detected `amdgpu` cards in the startup log and remove incorrect collector overrides. |
+| Missing disk health | Disable Protection mode and check detected drives and any `SMART_DEVICES` override. |
+| Repeated Watchdog restarts | Check startup errors and port `45877`. If another service uses that port, disable **Watchdog** on the **Info** tab and restart. |
 
-See the [installation and troubleshooting guide](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/INSTALLATION.md) for more detail, or [report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) with versions and redacted logs.
+[Report unresolved problems](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) with app/HA versions and logs with credentials removed.
