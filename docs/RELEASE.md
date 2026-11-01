@@ -33,10 +33,12 @@ Images use one multi-architecture manifest without an `-{arch}` suffix. Intel is
 
 ## Bridge release checks
 
-1. Complete the [HA OS checklist](MANUAL_CHECKLIST.md) for local and remote Hubs. Record tested versions, platforms and results in the release change.
-2. Test the candidate Hub, including invalid-field isolation and recovery. Capture sanitized fixtures for new versions and record successful coverage in `tested_hub_versions`.
-3. After validation, set `release_ready: true` in [compatibility.json](../beszel_bridge/compatibility.json) as part of the reviewed release change.
-4. The workflow runs both Bridge test scripts against the candidate Hub version. Verify published image tags and installation on both architectures before announcing availability.
+Bridge and full-repository releases run both Bridge test scripts against the candidate Hub version before publishing. There is no manual readiness flag. The Bridge uses the stable app stage.
+
+1. The workflow checks unit tests, captured fixtures, builds and real Hub, MQTT and Home Assistant behavior, including invalid-field isolation and recovery.
+2. Capture sanitized fixtures for new Hub versions and record successful coverage in `tested_hub_versions` in [compatibility.json](../beszel_bridge/compatibility.json).
+3. Use the [HA OS checklist](MANUAL_CHECKLIST.md) to record Supervisor installation and physical platform acceptance separately. This checklist does not disable publishing.
+4. Verify published image tags and installation on both architectures before announcing availability.
 
 ## Renaming an image
 

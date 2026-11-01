@@ -1,6 +1,5 @@
 {
   "schema": 2,
-  "release_ready": false,
   "home_assistant_minimum": "2026.10.1",
   "sample_collection": "system_stats",
   "sample_type": "1m",

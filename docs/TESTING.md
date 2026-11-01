@@ -65,4 +65,4 @@ Inside a running Bridge container:
 
 ## Continuous integration
 
-The [validation workflow](../.github/workflows/validate.yml) runs static and Agent SSH authentication checks on relevant changes. Its manual full run adds builds for every app, startup checks, mock Supervisor and end-to-end tests. Containers do not cover Supervisor installation or physical hardware. Complete the [HA OS checklist](MANUAL_CHECKLIST.md) before release.
+The [validation workflow](../.github/workflows/validate.yml) runs static and Agent SSH authentication checks on relevant changes. Its manual full run adds builds for every app, startup checks, mock Supervisor and end-to-end tests. Containers do not cover Supervisor installation or physical hardware. Use the [HA OS checklist](MANUAL_CHECKLIST.md) to record those checks separately.

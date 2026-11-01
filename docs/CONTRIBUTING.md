@@ -12,4 +12,4 @@ Search [app issues](https://github.com/vineetchoudhary/home-assistant-beszel-age
 - Keep each Markdown paragraph and list item on one physical line without wrapping sentences. Do not use em dashes or semicolons.
 - Run the relevant [tests](TESTING.md) and verify changed app behavior in Home Assistant.
 
-For development details, see [architecture](ARCHITECTURE.md), [HA OS release checks](MANUAL_CHECKLIST.md) and [publishing](RELEASE.md).
+For development details, see [architecture](ARCHITECTURE.md), [HA OS acceptance checks](MANUAL_CHECKLIST.md) and [publishing](RELEASE.md).

@@ -1,6 +1,6 @@
-# HA OS release checklist
+# HA OS acceptance checklist
 
-For contributors testing a release on a disposable or backed-up Home Assistant system. Record the app, HA OS, Supervisor, Core, Hub and architecture versions with each result.
+For contributors testing on a disposable or backed-up Home Assistant system. Record the app, HA OS, Supervisor, Core, Hub and architecture versions with each result. These manual checks track platform acceptance separately from the automated publishing checks.
 
 - [ ] Install and configure the Bridge using the [setup guide](../beszel_bridge/DOCS.md#setup), with Protection mode enabled.
 - [ ] Connect a local Hub by its internal hostname on `8090`, with its published port enabled and disabled. Verify base paths and access independent of Ingress.
@@ -14,4 +14,4 @@ For contributors testing a release on a disposable or backed-up Home Assistant s
 - [ ] Import both dashboard templates on desktop and mobile using actual entity IDs. Check missing metrics, unavailable readings, newly collected history and coexistence with other integrations.
 - [ ] Test native amd64 and aarch64 installations. Record emulation separately. Verify GPU and S.M.A.R.T. behavior on physical hardware before making hardware claims.
 - [ ] Confirm existing Hub and Agent apps still install, start, connect and restore from backups.
-- [ ] Resolve failures, include results in the release change and complete the [Bridge release checks](RELEASE.md#bridge-release-checks).
+- [ ] Resolve failures and include results in the release change. See [Bridge release checks](RELEASE.md#bridge-release-checks) for the automated publishing checks.

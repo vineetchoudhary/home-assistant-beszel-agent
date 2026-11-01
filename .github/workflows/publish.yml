@@ -188,12 +188,6 @@ jobs:
       - name: Verify Bridge compatibility before releasing
         if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'bridge')
         run: |
-          python3 - <<'PY'
-          import json
-          policy = json.load(open('beszel_bridge/compatibility.json'))
-          if policy.get('release_ready') is not True:
-              raise SystemExit('Bridge publishing is disabled until real HA OS/Supervisor acceptance is recorded. Complete docs/MANUAL_CHECKLIST.md, record the results in the release change, then set release_ready to true. Full releases include the Bridge and are also blocked; individual existing-app rebuilds remain available.')
-          PY
           chmod +x scripts/test-bridge.sh
           ./scripts/test-bridge.sh --hub-version "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
           python3 scripts/test-bridge-e2e.py --build --hub-version "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"

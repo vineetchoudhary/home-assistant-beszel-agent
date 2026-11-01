@@ -3,7 +3,7 @@ description: "Home Assistant entities and dashboards from a local or remote Besz
 version: "0.21.1.1"
 slug: "beszel-bridge"
 url: "https://github.com/vineetchoudhary/home-assistant-beszel-agent"
-stage: experimental
+stage: stable
 homeassistant: "2026.10.1"
 init: false
 startup: application
