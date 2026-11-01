@@ -104,20 +104,17 @@ bashio::log.info "========================================"
 
 # Get required configuration
 # Use environment variables first for local/docker testing to avoid noisy Supervisor API failures.
-KEY=""
+KEY="${KEY:-}"
 if [ -n "${BESZEL_KEY:-}" ]; then
     bashio::log.info "Using KEY from environment variable (test mode)"
     KEY="$BESZEL_KEY"
-elif supervisor_api_available; then
+elif [ -z "$KEY" ] && supervisor_api_available && bashio::config.has_value 'key'; then
     KEY="$(bashio::config 'key' 2>/dev/null || true)"
 fi
-if [ -z "$KEY" ]; then
-    die "Configuration error: 'key' is required but not set"
-fi
 
-# Validate key format (basic check for SSH key)
-if ! [[ "$KEY" =~ ^ssh- ]]; then
-    bashio::log.warning "Key does not appear to be a valid SSH public key (should start with 'ssh-')"
+KEY_FILE="${BESZEL_KEY_FILE:-${KEY_FILE:-}}"
+if [ -z "$KEY_FILE" ] && supervisor_api_available && bashio::config.has_value 'key_file'; then
+    KEY_FILE="$(bashio::config 'key_file' 2>/dev/null || true)"
 fi
 
 HUB_URL=""
@@ -171,6 +168,31 @@ if supervisor_api_available && bashio::config.has_value 'environment_vars'; then
         
         index=$((index + 1))
     done
+fi
+
+# Resolve authentication after custom environment variables so KEY_FILE works
+# even when an existing configuration still contains an inline key.
+KEY="${BESZEL_AGENT_KEY:-${KEY:-}}"
+KEY_FILE="${BESZEL_AGENT_KEY_FILE:-${KEY_FILE:-}}"
+AGENT_ARGS=()
+if [ -n "$KEY_FILE" ]; then
+    if [ ! -f "$KEY_FILE" ] || [ ! -r "$KEY_FILE" ]; then
+        die "Configuration error: 'key_file' must point to a readable regular file: ${KEY_FILE}"
+    fi
+    if ! grep -Eq '^[[:space:]]*[^#[:space:]]' "$KEY_FILE"; then
+        die "Configuration error: 'key_file' contains no public keys"
+    fi
+
+    # Upstream checks KEY before KEY_FILE. Clear both key aliases so the
+    # explicitly selected file is used, and normalize its environment name.
+    unset KEY BESZEL_AGENT_KEY BESZEL_AGENT_KEY_FILE
+    export KEY_FILE
+    bashio::log.info "Using public keys from file: ${KEY_FILE}"
+elif printf '%s\n' "$KEY" | grep -E '^[[:space:]]*[^#[:space:]]' >/dev/null; then
+    # Beszel parses newline-separated keys and comments in authorized_keys format.
+    AGENT_ARGS=(-key "$KEY")
+else
+    die "Configuration error: either 'key' or 'key_file' is required"
 fi
 
 # Report on the custom_volumes option.
@@ -276,4 +298,4 @@ start_healthcheck_server
 bashio::log.info "========================================"
 bashio::log.info "Starting Beszel Agent on port 45876..."
 bashio::log.info "========================================"
-exec /usr/local/bin/agent -key "$KEY"
+exec /usr/local/bin/agent "${AGENT_ARGS[@]}"

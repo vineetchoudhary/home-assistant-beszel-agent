@@ -18,6 +18,7 @@ Replace the public key and token with the complete values from **Add System**. R
 
 ```yaml
 key: "ssh-ed25519 REPLACE_WITH_YOUR_HUB_PUBLIC_KEY"
+key_file: ""
 hub_url: "http://192.168.1.100:8090"
 token: "replace-with-system-token"
 environment_vars: []
@@ -26,13 +27,37 @@ custom_volumes: []
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| `key` | `""`, required | Hub's complete SSH public key, including its `ssh-` prefix. |
+| `key` | `""` | Hub's complete SSH public key. For multiple Hubs, use one key per line. Required unless a key file is configured. |
+| `key_file` | `""` | File of public keys inside the app, such as `/ssl/beszel_authorized_keys`. Takes precedence over `key`. |
 | `hub_url` | `""`, required | Direct HTTP or HTTPS Hub URL, including its port and any base path. Home Assistant Ingress URLs do not work here. |
 | `token` | `""`, required | Secret registration token from **Add System**. |
 | `environment_vars` | `[]` | Optional Beszel settings, supplied as `name` and `value` pairs. |
 | `custom_volumes` | `[]` | Optional checks for paths already visible inside the app. Leave empty for normal use. |
 
 ## Advanced options
+
+### Multiple Hubs and key files
+
+To authorize more than one Hub, use the app's YAML configuration editor and put each Hub's complete public key on its own line:
+
+```yaml
+key: |
+  ssh-ed25519 REPLACE_WITH_PRIMARY_HUB_PUBLIC_KEY
+  ssh-ed25519 REPLACE_WITH_SECOND_HUB_PUBLIC_KEY
+```
+
+Alternatively, copy the public keys into Home Assistant's `/ssl/beszel_authorized_keys` file, one key per line, and configure:
+
+```yaml
+key: ""
+key_file: "/ssl/beszel_authorized_keys"
+```
+
+Both formats allow blank lines and comments starting with `#`. A configured `key_file` takes precedence over `key`. The file must be readable and contain public keys. Missing, empty or comment-only files stop startup. Save and restart the app after changing keys or file contents.
+
+You can also set `KEY` or `KEY_FILE` through `environment_vars` to override the corresponding option. The upstream `BESZEL_AGENT_KEY` and `BESZEL_AGENT_KEY_FILE` names are supported too.
+
+Keep `hub_url` and `token` configured for the primary Hub's outbound WebSocket connection. In each additional Hub, add the system using Home Assistant's IP address and port `45876`. That Hub must be able to reach the Agent over SSH.
 
 ### Environment variables
 
@@ -54,7 +79,7 @@ environment_vars:
     value: "/ssl/beszel-ca.crt"
 ```
 
-Keep the Hub's HTTPS URL, key and token configured. Certificate and hostname verification remain enabled. An unreadable or invalid CA file stops startup. Leave `CA_CERT_FILE` unset for HTTP or publicly trusted HTTPS.
+Keep the Hub's HTTPS URL, public keys and token configured. Certificate and hostname verification remain enabled. An unreadable or invalid CA file stops startup. Leave `CA_CERT_FILE` unset for HTTP or publicly trusted HTTPS.
 
 ### Custom volume checks
 
@@ -91,7 +116,7 @@ Run only one Agent variant at a time because they share ports. Include the app i
 
 | Problem | Check |
 | --- | --- |
-| App will not start | Fill in `key`, `hub_url` and `token`, then check the app's Log tab. |
+| App will not start | Configure `key` or `key_file`, plus `hub_url` and `token`, then check the app's Log tab. |
 | No readings in the Hub | Check the Hub URL, public key, token and network connection. |
 | HTTPS or `CA_CERT_FILE` error | Check the Hub hostname, PEM CA file and its `/ssl` path. |
 | Missing app statistics | Disable Protection mode. |

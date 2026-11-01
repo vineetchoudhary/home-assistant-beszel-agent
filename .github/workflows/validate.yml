@@ -48,6 +48,16 @@ jobs:
             yamllint -d '{rules: {document-start: disable, line-length: disable}}' "${config}"
           done
 
+  agent-keys:
+    name: Agent SSH authentication
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Agent key sources and SSH authorization
+        run: python3 scripts/test-agent-keys.py
+
   integration:
     name: Build, smoke and Supervisor tests
     runs-on: ubuntu-latest

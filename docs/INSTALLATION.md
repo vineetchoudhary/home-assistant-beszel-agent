@@ -34,6 +34,8 @@ token: "replace-with-system-token"
 
 Replace `192.168.1.100` with the Hub host's IP address. Home Assistant Ingress URLs cannot be used as `hub_url`.
 
+For multiple Hubs, configure one public key per line or load them from a file. See [multiple Hubs and key files](../beszel_agent/DOCS.md#multiple-hubs-and-key-files) in your Agent's configuration guide.
+
 ![Public key and token in the Hub's Add System dialog](screenshots/8-beszel-config.webp)
 
 Before starting, set **Protection mode** for the metrics you need. Disabling it grants the app broader host access.
