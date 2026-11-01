@@ -10,6 +10,7 @@ Run commands from the repository root. Container tests need Docker, Git and Pyth
 | Build and startup for every app | `./scripts/test-apps.sh` |
 | Build and startup for one app | `./scripts/test-apps.sh beszel_hub` |
 | Mock Supervisor configuration loading | `./scripts/test-apps.sh --supervisor` |
+| Container test runner regressions | `python3 -B scripts/test-ci-runners.py` |
 | Agent key sources and SSH authorization | `python3 scripts/test-agent-keys.py` |
 | Hub registration and readings from every Agent | `./scripts/test-e2e.sh --all-agents` |
 

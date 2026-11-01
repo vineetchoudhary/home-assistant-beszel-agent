@@ -188,6 +188,7 @@ jobs:
       - name: Verify Bridge compatibility before releasing
         if: steps.check_version.outputs.run_steps == 'true' && (steps.trigger_type.outputs.image_type == 'all' || steps.trigger_type.outputs.image_type == 'bridge')
         run: |
+          python3 -B scripts/test-ci-runners.py
           chmod +x scripts/test-bridge.sh
           ./scripts/test-bridge.sh --hub-version "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"
           python3 scripts/test-bridge-e2e.py --build --hub-version "${{ steps.resolve_versions.outputs.BESZEL_VERSION }}"

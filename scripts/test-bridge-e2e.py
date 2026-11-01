@@ -166,6 +166,11 @@ class Lab:
     def status(self):
         return json.loads(self.docker("exec", self.bridge, "/usr/local/bin/bridge", "status"))
 
+    def bridge_state(self):
+        # The container writes this private file as root. Read it with the same
+        # container user, rather than the unprivileged Linux CI host account.
+        return json.loads(self.docker("exec", self.bridge, "cat", "/data/bridge-state.json"))
+
     def readable(self, key):
         entity = self.entity(key)
         return entity and entity["state"] not in ("unavailable", "unknown")
@@ -271,7 +276,7 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
             self.capture_fixtures(reader_password, auth["record"]["id"], reader["id"])
         self.start_bridge()
         self.wait("Bridge persists stable Hub identity", lambda: (self.bridge_dir / "bridge-state.json").exists())
-        self.namespace = json.loads((self.bridge_dir / "bridge-state.json").read_text())["namespace"]
+        self.namespace = self.bridge_state()["namespace"]
 
     def capture_fixtures(self, password, admin_id, reader_id):
         api = self.hub_api
@@ -394,7 +399,21 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
             subprocess.run(["docker", "rm", "-fv", container], capture_output=True)
         if self.network_created:
             subprocess.run(["docker", "network", "rm", self.tag], capture_output=True)
-        shutil.rmtree(self.directory)
+        self.remove_test_directory()
+
+    def remove_test_directory(self):
+        try:
+            shutil.rmtree(self.directory)
+        except PermissionError:
+            # HA creates private, root-owned directories on Linux bind mounts.
+            # Remove only this disposable lab's contents inside a container.
+            self.docker("run", "--rm", "--entrypoint", "python", "-v",
+                        f"{self.directory}:/lab", HA_IMAGE, "-c",
+                        "import pathlib,shutil\n"
+                        "for path in pathlib.Path('/lab').iterdir():\n"
+                        "    if path.is_symlink() or not path.is_dir(): path.unlink()\n"
+                        "    else: shutil.rmtree(path)\n")
+            self.directory.rmdir()
 
 
 def main():

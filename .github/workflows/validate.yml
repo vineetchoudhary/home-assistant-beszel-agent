@@ -55,6 +55,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Container test runner regressions
+        run: python3 -B scripts/test-ci-runners.py
+
       - name: Agent key sources and SSH authorization
         run: python3 scripts/test-agent-keys.py
 

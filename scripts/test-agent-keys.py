@@ -72,10 +72,12 @@ def check_case(image, app, work, network, options, accepted=(), rejected=(), err
         deadline = time.monotonic() + 15
         logs = ""
         while time.monotonic() < deadline:
-            output = run("docker", "logs", container)
-            logs = (output.stdout + output.stderr).decode(errors="replace")
             state = json.loads(run("docker", "inspect", "--format", "{{json .State}}",
                                    container).stdout)
+            # Fetch logs after the state snapshot. The Agent may exit between
+            # these calls, so a stopped state must use its final diagnostic.
+            output = run("docker", "logs", container)
+            logs = (output.stdout + output.stderr).decode(errors="replace")
             if not state["Running"]:
                 if error and state["ExitCode"] != 0 and error in logs:
                     return
