@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -91,25 +92,26 @@ func execute() error {
 		if err != nil {
 			return err
 		}
-		systems, err := hub.systems(ctx)
+		inventory, err := hub.systems(ctx)
 		if err != nil {
 			return err
 		}
-		report := map[string]any{"hub_version": info.Version, "visible_systems": len(systems), "systems": []any{}}
+		report := map[string]any{"hub_version": info.Version, "visible_systems": len(inventory.Systems), "inventory_complete": inventory.Complete, "systems": []any{}}
 		rows := []map[string]any{}
-		for _, system := range systems {
+		for _, system := range inventory.Systems {
 			if !c.selected(system.ID) {
 				continue
 			}
-			sample, err := hub.latestSample(ctx, system.ID)
-			if err != nil {
-				return err
+			sample, sampleErr := hub.latestSample(ctx, system.ID)
+			values, created, valueErr := metricValues(system, sample)
+			row := map[string]any{"id": system.ID, "name": system.Name, "status": system.Status, "sample_created": created, "fresh": fresh(created, time.Now(), c.StaleAfter), "available_metrics": len(values)}
+			if err := errors.Join(sampleErr, valueErr); err != nil {
+				row["error"] = err.Error()
 			}
-			values, created, err := metricValues(system, sample)
-			if err != nil {
-				return err
+			if len(system.Issues) > 0 {
+				row["issues"] = system.Issues
 			}
-			rows = append(rows, map[string]any{"id": system.ID, "name": system.Name, "status": system.Status, "sample_created": created, "fresh": fresh(created, time.Now(), c.StaleAfter), "available_metrics": len(values)})
+			rows = append(rows, row)
 		}
 		report["systems"] = rows
 		return json.NewEncoder(os.Stdout).Encode(report)

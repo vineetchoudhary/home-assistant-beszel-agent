@@ -22,13 +22,16 @@ For `test-e2e.sh`, omit `--all-agents` to test only the standard Agent. `--keep`
 ./scripts/test-bridge.sh
 python3 scripts/test-bridge-e2e.py --build --hub-version 0.20.0
 python3 scripts/test-bridge-e2e.py --build --hub-version 0.21.0
+python3 scripts/test-bridge-e2e.py --build --hub-version 0.21.1
 ```
 
-The first command runs Go tests, vet, formatting and amd64/arm64 compilation. The end-to-end commands run Hub, Agent, MQTT and Home Assistant containers to check entities, dashboards, outages, restarts and cleanup.
+The first command runs Go tests, vet, formatting and amd64/arm64 compilation. The end-to-end commands run Hub, Agent, MQTT and Home Assistant containers to check entities, dashboards, malformed fields, newer version metadata, outages, restarts and cleanup.
 
-`--build` builds the Bridge and the selected Hub version without changing repository pins. If `--hub-version` is omitted, the Hub's pin is used. Versions outside [compatibility.json](../beszel_bridge/compatibility.json) fail before setup.
+`--build` builds the Bridge and the selected Hub version without changing repository pins. If `--hub-version` is omitted, the Hub's pin is used. Any release version can be tested. The [compatibility file](../beszel_bridge/compatibility.json) records coverage and does not restrict runtime versions.
 
 Add `--report .artifacts/bridge/report.json` to save results. `--keep` retains the environment and prints its URLs, container names, network and temporary directory. Remove those resources when finished. Otherwise cleanup is automatic.
+
+Add `--capture-fixtures .artifacts/bridge/fixtures/0.21.1` to capture sanitized readonly API responses in a new directory. Review them before adding fixtures and recording tested versions.
 
 ### Bridge fixtures
 

@@ -5,7 +5,7 @@ For contributors testing a release on a disposable or backed-up Home Assistant s
 - [ ] Install and configure the Bridge using the [setup guide](../beszel_bridge/DOCS.md#setup), with Protection mode enabled.
 - [ ] Connect a local Hub by its internal hostname on `8090`, with its published port enabled and disabled. Verify base paths and access independent of Ingress.
 - [ ] Connect a remote Hub over LAN and HTTPS, including a base path and a private CA in read-only `/ssl`. Reject untrusted certificates.
-- [ ] Verify each supported Hub version, readonly sharing, no shared systems, reduced permissions, session expiry and password changes. Unsupported Hub versions must produce an actionable error.
+- [ ] Verify recorded Hub versions, readonly sharing, no shared systems, reduced permissions, session expiry and password changes. Check that newer version metadata is accepted and malformed fields leave other readings and servers working.
 - [ ] Test Supervisor and manual MQTT settings, TLS, custom discovery prefixes, rejected credentials, delayed startup and HA rediscovery.
 - [ ] Restart HA, Hub, broker and Bridge in different orders. Check recovery with fresh data, no duplicate devices and no Watchdog restart loop during upstream outages.
 - [ ] Verify device grouping, metric units, source timestamps, valid zero values, missing sensors, system status and system/metric filters. Test pagination and partial or malformed responses.

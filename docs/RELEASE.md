@@ -27,14 +27,14 @@ When adding an app, update the workflow's build helpers and choices. Publish its
 
 The workflow uses `beszel_agent/config.yaml` as its app-version reference. Keep all app versions, image tags and the release tag aligned. The six Hub/Agent apps pin upstream binaries in `beszel_version`. Automatic releases update both versions. Tag releases keep existing binary pins.
 
-The Bridge has no bundled Beszel binary. Its [compatibility policy](../beszel_bridge/compatibility.json) lists supported Hub versions.
+The Bridge has no bundled Beszel binary. Its [compatibility policy](../beszel_bridge/compatibility.json) records tested Hub versions. New versions are accepted automatically, and the workflow tests the candidate Hub before publishing.
 
 Images use one multi-architecture manifest without an `-{arch}` suffix. Intel is amd64-only. Other images support amd64/arm64. NVIDIA uses the Debian base. The workflow tests a local amd64 image before publishing.
 
 ## Bridge release checks
 
 1. Complete the [HA OS checklist](MANUAL_CHECKLIST.md) for local and remote Hubs. Record tested versions, platforms and results in the release change.
-2. For a new Hub version, capture sanitized fixtures and verify units, source timestamps and Home Assistant entities before changing compatibility.
+2. Test the candidate Hub, including invalid-field isolation and recovery. Capture sanitized fixtures for new versions and record successful coverage in `tested_hub_versions`.
 3. After validation, set `release_ready: true` in [compatibility.json](../beszel_bridge/compatibility.json) as part of the reviewed release change.
 4. The workflow runs both Bridge test scripts against the candidate Hub version. Verify published image tags and installation on both architectures before announcing availability.
 

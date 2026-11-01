@@ -66,15 +66,15 @@ func TestHubBasePathPaginationAndSessionRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := hub.systems(context.Background())
-	if err != nil || len(items) != 2 {
-		t.Fatalf("pagination: %v, %d", err, len(items))
+	if err != nil || len(items.Systems) != 2 || !items.Complete {
+		t.Fatalf("pagination: %v, %d", err, len(items.Systems))
 	}
 	if logins.Load() != 1 || refreshes.Load() != 1 {
 		t.Errorf("unexpected authentication attempts: %d/%d", logins.Load(), refreshes.Load())
 	}
 }
 
-func TestHubRejectsPartialInventoryAndUnknownVersion(t *testing.T) {
+func TestHubKeepsPartialInventoryAndAcceptsNewVersions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/info") {
 			respond(w, HubInfo{Version: "0.99.0", Key: "ssh-ed25519 fixture"})
@@ -91,12 +91,12 @@ func TestHubRejectsPartialInventoryAndUnknownVersion(t *testing.T) {
 	c.HubURL = server.URL
 	hub, _ := newHub(c)
 	hub.token = "fixture"
-	if _, err := hub.info(context.Background()); err == nil {
-		t.Error("unknown Hub version was guessed compatible")
+	if _, err := hub.info(context.Background()); err != nil {
+		t.Error("new Hub version was rejected before examining its data")
 	}
 	items, err := hub.systems(context.Background())
-	if err == nil || items != nil {
-		t.Error("partial inventory was treated as authoritative")
+	if err != nil || items.Complete || len(items.Systems) != 1 {
+		t.Error("valid partial inventory was discarded or treated as authoritative")
 	}
 }
 
@@ -197,5 +197,33 @@ func TestRevokedSessionFallsBackToPasswordLogin(t *testing.T) {
 	}
 	if logins.Load() != 1 || refreshes.Load() != 1 {
 		t.Error("revoked session did not renew through one bounded refresh and login")
+	}
+}
+
+func TestAuthenticationIgnoresUnneededMetadataChanges(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respond(w, map[string]any{"token": "valid-session", "mfaId": map[string]any{"format": "changed"}, "new_field": []any{false, nil}})
+	}))
+	defer server.Close()
+	c := testConfig()
+	c.HubURL = server.URL
+	hub, _ := newHub(c)
+	if err := hub.authenticate(context.Background(), false); err != nil || hub.token != "valid-session" {
+		t.Fatal("unneeded auth metadata blocked a valid session")
+	}
+}
+
+func TestInconsistentPageMetadataIsNotAuthoritative(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respond(w, map[string]any{"page": 1, "totalPages": 0, "totalItems": 1, "items": []any{map[string]string{"id": "sys000000000001", "status": "up"}}})
+	}))
+	defer server.Close()
+	c := testConfig()
+	c.HubURL = server.URL
+	hub, _ := newHub(c)
+	hub.token = "fixture"
+	inventory, err := hub.systems(context.Background())
+	if err != nil || inventory.Complete || len(inventory.Systems) != 1 {
+		t.Fatal("contradictory pagination was authoritative or discarded valid rows")
 	}
 }

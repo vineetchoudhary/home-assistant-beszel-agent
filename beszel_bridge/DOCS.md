@@ -4,7 +4,7 @@ Bring readings from a local or remote Beszel Hub into Home Assistant as MQTT dev
 
 ## Requirements
 
-- Home Assistant **2026.10.1 or newer** and Hub **0.20.0 or 0.21.0**.
+- Home Assistant **2026.10.0 or newer** and a Beszel Hub.
 - An MQTT broker connected to Home Assistant's MQTT integration.
 - A dedicated Hub account with a password and shared systems, preferably with the `readonly` role. Superuser credentials, Agent tokens, OAuth-only accounts and interactive MFA are unsupported.
 
@@ -132,7 +132,7 @@ metrics:
 
 Missing or stale readings are unavailable. Freshness uses the Hub's source sample time, so polling more often does not make old data fresh. HA history starts when entities report. Older history stays in Beszel. Container, GPU, S.M.A.R.T. and extra filesystem entities are not available.
 
-Renaming a server or changing the same Hub's URL preserves its devices. HA entity customizations also survive restarts. Excluded systems are removed at the next successful sync. Inaccessible systems are removed after five minutes of successful inventory checks. Failed checks do not remove devices.
+Renaming a server or changing the same Hub's URL preserves its devices. HA entity customizations also survive restarts. Excluded systems are removed at the next successful sync. Inaccessible systems are removed after five minutes of complete, successful inventory checks. Incomplete or malformed inventories preserve existing devices.
 
 ## Troubleshooting
 
@@ -143,7 +143,7 @@ Renaming a server or changing the same Hub's URL preserves its devices. HA entit
 | MQTT service unavailable | Start the broker app or choose manual settings. |
 | Missing Home Assistant entities | Use the same broker and discovery prefix as Home Assistant, then check for a successful sync. |
 | Unavailable readings | Check the Agent, Hub connection and age of the source sample. |
-| Unsupported Hub version | Use a version listed in Requirements. |
+| Readings missing after a Hub update | Check the app log for changed or invalid fields. Other valid readings continue, and affected readings recover automatically when valid data returns. |
 
 The Bridge's Watchdog checks its process and can remain healthy during Hub or broker outages. Check the log and connection diagnostics for those failures.
 

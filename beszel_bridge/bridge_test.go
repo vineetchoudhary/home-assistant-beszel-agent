@@ -27,13 +27,13 @@ func testConfig() Config {
 
 func TestCapturedVersionMetricsAndSourceFreshness(t *testing.T) {
 	var policy Compatibility
-	if err := json.Unmarshal(compatibilityJSON, &policy); err != nil || len(policy.HubVersions) == 0 {
+	if err := json.Unmarshal(compatibilityJSON, &policy); err != nil || len(policy.TestedHubVersions) == 0 {
 		t.Fatal("compatibility policy must declare tested versions")
 	}
-	for _, version := range policy.HubVersions {
+	for _, version := range policy.TestedHubVersions {
 		t.Run(version, func(t *testing.T) {
 			info := fixture[HubInfo](t, version, "info.json")
-			if info.Version != version || !supportedVersion(info.Version) || info.Key == "" {
+			if info.Version != version || info.Key == "" {
 				t.Fatal("declared version is missing its captured identity/version response")
 			}
 			system := fixture[page[System]](t, version, "systems.json").Items[0]

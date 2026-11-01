@@ -26,11 +26,12 @@ fi
 if [ "${1:-}" = "--hub-version" ]; then
     [ "$#" -eq 2 ] || { echo 'Usage: test-bridge.sh [--hub-version VERSION]' >&2; exit 2; }
     python3 - "${bridge_repo_root}/beszel_bridge/compatibility.json" "$2" <<'PY'
-import json, sys
+import json, re, sys
 policy = json.load(open(sys.argv[1]))
-if sys.argv[2] not in policy['hub_versions']:
-    sys.exit('Bridge compatibility is not verified for Hub ' + sys.argv[2] + '; capture and test its schema before releasing.')
-print('Bridge compatibility declared for Hub ' + sys.argv[2])
+if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?', sys.argv[2]):
+    sys.exit('Expected a Hub release version such as 0.21.1')
+coverage = 'recorded' if sys.argv[2] in policy['tested_hub_versions'] else 'not yet recorded'
+print('Hub ' + sys.argv[2] + ': test coverage ' + coverage + '. Versions are not runtime-gated.')
 PY
 elif [ "$#" -gt 0 ]; then
     echo 'Usage: test-bridge.sh [--hub-version VERSION]' >&2

@@ -101,7 +101,7 @@ func TestPublicationFreshnessDiscoveryAndCleanup(t *testing.T) {
 		t.Error("Hub outage failed to mark unavailable or deleted entities")
 	}
 	fail = false
-	inventory = nil
+	inventory = []System{}
 	if err := s.sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}

@@ -30,6 +30,8 @@ func sampleTime(raw string) (time.Time, error) {
 	return time.Time{}, errors.New("Hub sample has no valid source timestamp")
 }
 
+// Return every independently valid reading alongside any data issues. A caller
+// must still enforce the shared source timestamp before publishing readings.
 func metricValues(system System, sample *Sample) (map[string]string, time.Time, error) {
 	values := map[string]string{}
 	if sample == nil {
@@ -37,12 +39,18 @@ func metricValues(system System, sample *Sample) (map[string]string, time.Time, 
 	}
 	created, err := sampleTime(sample.Created)
 	if err != nil {
-		return nil, time.Time{}, err
+		return values, time.Time{}, err
+	}
+	var issues []error
+	for _, issue := range sample.Issues {
+		issues = append(issues, errors.New(issue))
 	}
 	core := map[string]*float64{"cpu_usage": sample.Stats.CPU, "memory_usage": sample.Stats.Memory, "disk_usage": sample.Stats.Disk}
-	for key, value := range core {
+	for _, key := range []string{"cpu_usage", "memory_usage", "disk_usage"} {
+		value := core[key]
 		if value == nil || !validNumber(*value) || *value < 0 || *value > 100 {
-			return nil, time.Time{}, fmt.Errorf("Hub sample has unsupported or invalid %s data", key)
+			issues = append(issues, fmt.Errorf("missing or invalid %s", key))
+			continue
 		}
 		values[key] = number(*value)
 	}
@@ -50,8 +58,7 @@ func metricValues(system System, sample *Sample) (map[string]string, time.Time, 
 		values["uptime"] = strconv.FormatUint(*system.Info.Uptime, 10)
 	}
 	values["last_sample"] = created.UTC().Format(time.RFC3339Nano)
-	// Temperature exists only when an actual sensor map is present. The summary
-	// dt field can be zero for machines without sensors, so it is not evidence.
+	// A real sensor map is evidence of temperature capability. Summary dt=0 is not.
 	hasTemp := false
 	var highest float64
 	for _, temperature := range sample.Stats.Temperatures {
@@ -63,32 +70,36 @@ func metricValues(system System, sample *Sample) (map[string]string, time.Time, 
 	if hasTemp {
 		values["temperature"] = number(highest)
 	}
-	var sent, received float64
-	hasNetwork := false
-	if sample.Stats.Bandwidth != nil {
-		if len(sample.Stats.Bandwidth) != 2 {
-			return nil, time.Time{}, errors.New("invalid network bandwidth tuple")
-		}
-		sent = sample.Stats.Bandwidth[0]
-		received = sample.Stats.Bandwidth[1]
-		hasNetwork = true
-	} else if len(sample.Stats.Interfaces) > 0 {
-		// In the verified versions the aggregate b array is omitted when idle,
-		// but ni still records [sent B/s, received B/s, total sent, total received].
-		for _, network := range sample.Stats.Interfaces {
-			if len(network) != 4 {
-				return nil, time.Time{}, errors.New("invalid network interface tuple")
+	for index, key := range []string{"network_transmit", "network_receive"} {
+		var rate float64
+		valid := true
+		switch {
+		case sample.Stats.Bandwidth != nil:
+			rate, valid = tupleRate(sample.Stats.Bandwidth, index)
+		case len(sample.Stats.Interfaces) > 0:
+			// ni starts with [sent B/s, received B/s]. Ignore additional counters.
+			for _, network := range sample.Stats.Interfaces {
+				value, ok := tupleRate(network, index)
+				rate += value
+				valid = valid && ok
 			}
-			sent += network[0]
-			received += network[1]
+		default:
+			continue
 		}
-		hasNetwork = true
+		if valid && validNumber(rate) {
+			values[key] = number(rate)
+		} else {
+			issues = append(issues, fmt.Errorf("missing or invalid %s", key))
+		}
 	}
-	if hasNetwork && validNumber(sent) && validNumber(received) && sent >= 0 && received >= 0 {
-		values["network_transmit"] = number(sent)
-		values["network_receive"] = number(received)
+	return values, created, errors.Join(issues...)
+}
+
+func tupleRate(values []float64, index int) (float64, bool) {
+	if len(values) <= index || !validNumber(values[index]) || values[index] < 0 {
+		return 0, false
 	}
-	return values, created, nil
+	return values[index], true
 }
 func validNumber(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) }
 func number(n float64) string    { return strconv.FormatFloat(n, 'f', -1, 64) }

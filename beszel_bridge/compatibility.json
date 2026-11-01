@@ -1,10 +1,15 @@
 {
-  "schema": 1,
+  "schema": 2,
   "release_ready": false,
-  "hub_versions": ["0.20.0", "0.21.0"],
   "home_assistant_minimum": "2026.10.1",
   "sample_collection": "system_stats",
   "sample_type": "1m",
   "sample_timestamp": "created",
-  "fixtures": "testdata/<hub_version>/"
+  "fixtures": "testdata/<hub_version>/",
+  "version_policy": "capabilities",
+  "tested_hub_versions": [
+    "0.20.0",
+    "0.21.0",
+    "0.21.1"
+  ]
 }

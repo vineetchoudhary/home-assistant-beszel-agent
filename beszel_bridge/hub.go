@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -17,21 +18,10 @@ import (
 var compatibilityJSON []byte
 
 type Compatibility struct {
-	HubVersions []string `json:"hub_versions"`
+	TestedHubVersions []string `json:"tested_hub_versions"`
 }
 
-func supportedVersion(version string) bool {
-	var policy Compatibility
-	if json.Unmarshal(compatibilityJSON, &policy) != nil {
-		return false
-	}
-	for _, candidate := range policy.HubVersions {
-		if version == candidate {
-			return true
-		}
-	}
-	return false
-}
+var releaseVersion = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$`)
 
 type HubInfo struct {
 	Key     string `json:"key"`
@@ -46,6 +36,7 @@ type System struct {
 		Uptime  *uint64 `json:"u"`
 		Version string  `json:"v"`
 	} `json:"info"`
+	Issues []string `json:"-"`
 }
 type Sample struct {
 	ID      string `json:"id"`
@@ -60,6 +51,7 @@ type Sample struct {
 		Interfaces   map[string][]float64 `json:"ni"`
 		Temperatures map[string]float64   `json:"t"`
 	} `json:"stats"`
+	Issues []string `json:"-"`
 }
 type page[T any] struct {
 	Page       int `json:"page"`
@@ -123,8 +115,12 @@ func (h *Hub) raw(ctx context.Context, method, endpoint string, payload any, out
 	if response.StatusCode != http.StatusOK {
 		return &apiError{Status: response.StatusCode, Operation: strings.Split(endpoint, "?")[0]}
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(output); err != nil {
-		return errors.New("Hub returned invalid API JSON; check its base path, authentication gateway, and supported version")
+	decoder := json.NewDecoder(io.LimitReader(response.Body, 8<<20))
+	if err := decoder.Decode(output); err != nil {
+		return errors.New("Hub returned invalid API JSON; check its base path and authentication gateway")
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return errors.New("Hub returned invalid API JSON after its response")
 	}
 	return nil
 }
@@ -140,7 +136,6 @@ func safeNetworkError(err error) error {
 func (h *Hub) authenticate(ctx context.Context, refresh bool) error {
 	var result struct {
 		Token string `json:"token"`
-		MFAID string `json:"mfaId"`
 	}
 	endpoint := "/api/collections/users/auth-with-password"
 	var payload any = map[string]string{"identity": h.cfg.HubEmail, "password": h.cfg.HubPassword}
@@ -183,61 +178,92 @@ func (h *Hub) info(ctx context.Context) (HubInfo, error) {
 	if err := h.get(ctx, "/api/beszel/info", &info); err != nil {
 		return info, err
 	}
-	if !supportedVersion(info.Version) {
-		return info, fmt.Errorf("unsupported Hub version %q; check the Bridge compatibility table", info.Version)
-	}
 	if !strings.HasPrefix(info.Key, "ssh-") {
 		return info, errors.New("Hub did not return its stable public-key identity")
 	}
 	return info, nil
 }
 
-func (h *Hub) systems(ctx context.Context) ([]System, error) {
-	var systems []System
+type Inventory struct {
+	Systems  []System
+	Complete bool
+	Issues   []string
+}
+
+func (h *Hub) systems(ctx context.Context) (Inventory, error) {
+	inventory := Inventory{Complete: true}
 	seen := map[string]bool{}
 	expected := -1
 	for number := 1; number <= 10000; number++ {
-		var result page[System]
+		var raw json.RawMessage
 		endpoint := fmt.Sprintf("/api/collections/systems/records?page=%d&perPage=100&sort=id", number)
-		if err := h.get(ctx, endpoint, &result); err != nil {
-			return nil, err
+		err := h.get(ctx, endpoint, &raw)
+		var result recordsPage
+		if err == nil {
+			result, err = decodeRecordsPage(raw)
+		}
+		if err != nil {
+			if number == 1 || ctx.Err() != nil {
+				return inventory, err
+			}
+			inventory.Complete = false
+			inventory.Issues = append(inventory.Issues, "Hub inventory pagination failed")
+			return inventory, nil
 		}
 		if expected == -1 {
 			expected = result.TotalItems
 		}
 		if result.TotalItems != expected {
-			return nil, errors.New("Hub inventory changed during pagination; retrying complete inventory")
+			inventory.Complete = false
+			inventory.Issues = append(inventory.Issues, "Hub inventory changed during pagination")
 		}
-		if result.Page != number || result.TotalPages < 0 || result.TotalPages > 10000 || (len(result.Items) == 0 && number < result.TotalPages) {
-			return nil, errors.New("Hub returned an incomplete system inventory")
-		}
-		for _, system := range result.Items {
-			if !recordID.MatchString(system.ID) || seen[system.ID] {
-				return nil, errors.New("Hub returned invalid or duplicate system identifiers")
+		for _, record := range result.Items {
+			var system System
+			if json.Unmarshal(record, &system) != nil || !recordID.MatchString(system.ID) || seen[system.ID] {
+				inventory.Complete = false
+				inventory.Issues = append(inventory.Issues, "Hub inventory contains an invalid or duplicate system identifier")
+				continue
 			}
 			seen[system.ID] = true
-			systems = append(systems, system)
+			inventory.Systems = append(inventory.Systems, system)
+		}
+		if !result.Valid || result.Page != number || result.TotalPages > 10000 ||
+			(result.TotalPages == 0 && (len(result.Items) > 0 || result.TotalItems != 0)) ||
+			(len(result.Items) == 0 && number < result.TotalPages) {
+			inventory.Complete = false
+			inventory.Issues = append(inventory.Issues, "Hub returned incomplete inventory pagination metadata")
+			return inventory, nil
 		}
 		if number >= result.TotalPages {
-			if len(systems) != expected {
-				return nil, errors.New("Hub returned an incomplete system inventory")
+			if len(inventory.Systems) != expected {
+				inventory.Complete = false
+				inventory.Issues = append(inventory.Issues, "Hub inventory count does not match its records")
 			}
-			return systems, nil
+			return inventory, nil
 		}
 	}
-	return nil, errors.New("Hub inventory exceeds the supported pagination limit")
+	inventory.Complete = false
+	inventory.Issues = append(inventory.Issues, "Hub inventory exceeds the pagination limit")
+	return inventory, nil
 }
 
 func (h *Hub) latestSample(ctx context.Context, id string) (*Sample, error) {
 	q := url.Values{"filter": {fmt.Sprintf("system='%s' && type='1m'", id)}, "sort": {"-created"}, "perPage": {"1"}}
-	var result page[Sample]
-	if err := h.get(ctx, "/api/collections/system_stats/records?"+q.Encode(), &result); err != nil {
+	var raw json.RawMessage
+	if err := h.get(ctx, "/api/collections/system_stats/records?"+q.Encode(), &raw); err != nil {
+		return nil, err
+	}
+	result, err := decodeRecordsPage(raw)
+	if err != nil {
 		return nil, err
 	}
 	if len(result.Items) == 0 {
 		return nil, nil
 	}
-	sample := result.Items[0]
+	var sample Sample
+	if json.Unmarshal(result.Items[0], &sample) != nil {
+		return nil, errors.New("Hub returned an invalid sample record")
+	}
 	if sample.System != id || sample.Type != "1m" {
 		return nil, errors.New("Hub sample does not match the requested system and interval")
 	}

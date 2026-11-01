@@ -7,6 +7,7 @@ and Supervisor installations are never contacted. Run with Docker available.
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -32,10 +33,26 @@ class Proxy(http.server.BaseHTTPRequestHandler):
         except urllib.error.HTTPError as error:
             upstream=error
         data=upstream.read()
-        fault=pathlib.Path('/lab/proxy-fault.json')
-        if '/system_stats/records' in self.path and fault.exists() and json.loads(fault.read_text()).get('stale'):
+        fault_path=pathlib.Path('/lab/proxy-fault.json')
+        fault=json.loads(fault_path.read_text()) if fault_path.exists() else {}
+        if fault:
             response=json.loads(data)
-            for sample in response.get('items',[]): sample['created']='2000-01-01 00:00:00.000Z'
+            if self.path.endswith('/api/beszel/info') and fault.get('future_version'):
+                response['v']='9.99.0'
+                response['future_field']={'format':'new'}
+            if '/systems/records' in self.path:
+                if fault.get('invalid_status'):
+                    for system in response.get('items',[]): system['status']={'format':'changed'}
+                if fault.get('incomplete_inventory'):
+                    response['items'].append({'id':False,'name':'unreadable'})
+                    response['totalItems']+=1
+            if '/system_stats/records' in self.path:
+                for sample in response.get('items',[]):
+                    if fault.get('stale'): sample['created']='2000-01-01 00:00:00.000Z'
+                    if fault.get('invalid_timestamp'): sample['created']='changed-timestamp-format'
+                    if fault.get('invalid_cpu'): sample['stats']['cpu']={'changed':'upstream-secret-do-not-echo'}
+                    if fault.get('missing_memory'): sample['stats'].pop('mp',None)
+                if fault.get('invalid_sample'): response['items']=['changed-record-format']
             data=json.dumps(response).encode()
         self.send_response(upstream.status)
         self.send_header('Content-Type','application/json')
@@ -132,9 +149,9 @@ class Lab:
             args.append("--customize")
         return json.loads(self.docker(*args))
 
-    def entity(self, key):
+    def entity(self, key, system_id=None):
         snapshot = self.snapshot()
-        unique_id = self.namespace + "_" + self.system_id + "_" + key
+        unique_id = self.namespace + "_" + (system_id or self.system_id) + "_" + key
         entity = next((entity for entity in snapshot["entities"] if entity["unique_id"] == unique_id), None)
         return snapshot["states"].get(entity["entity_id"]) if entity else None
 
@@ -145,6 +162,50 @@ class Lab:
     def metric_unavailable(self):
         state = self.entity("cpu_usage")
         return state and state["state"] == "unavailable"
+
+    def status(self):
+        return json.loads(self.docker("exec", self.bridge, "/usr/local/bin/bridge", "status"))
+
+    def readable(self, key):
+        entity = self.entity(key)
+        return entity and entity["state"] not in ("unavailable", "unknown")
+
+    def data_fault_checks(self):
+        fault = self.directory / "proxy-fault.json"
+        scenarios = [
+            ("future_version", "future Hub version metadata permits normal polling", (), ("cpu_usage", "memory_usage")),
+            ("invalid_cpu", "malformed CPU leaves memory and disk available in HA", ("cpu_usage",), ("memory_usage", "disk_usage")),
+            ("missing_memory", "missing memory leaves CPU and disk available in HA", ("memory_usage",), ("cpu_usage", "disk_usage")),
+            ("invalid_status", "unknown server status leaves valid readings available in HA", ("system_status", "connectivity"), ("cpu_usage", "memory_usage")),
+            ("invalid_sample", "broken sample preserves devices and Bridge liveness", ("cpu_usage", "memory_usage"), ()),
+            ("invalid_timestamp", "invalid source timestamp fails closed without stopping Bridge", ("cpu_usage", "memory_usage"), ()),
+            ("incomplete_inventory", "unreadable inventory record preserves valid HA readings", (), ("cpu_usage", "memory_usage")),
+        ]
+        for mode, title, unavailable, available in scenarios:
+            before = self.status()["last_sync"]
+            temporary = fault.with_suffix(".tmp")
+            temporary.write_text(json.dumps({mode: True}))
+            temporary.replace(fault)
+            def observed():
+                status = self.status()
+                if status.get("last_sync") == before or not status.get("hub_connected"):
+                    return False
+                if mode == "future_version":
+                    version = self.entity("hub_version", "bridge")
+                    if not version or version["state"] != "9.99.0": return False
+                if mode == "incomplete_inventory" and not status.get("inventory_incomplete"): return False
+                if unavailable and status.get("degraded_systems") != 1: return False
+                for key in unavailable:
+                    entity = self.entity(key)
+                    if not entity or entity["state"] != "unavailable": return False
+                return all(self.readable(key) for key in available)
+            self.wait(title, observed)
+            self.docker("exec", self.bridge, "/usr/local/bin/bridge", "health")
+            fault.unlink()
+            self.wait("valid data recovers after " + mode, lambda: not self.status().get("error") and self.metric_ready() and self.readable("memory_usage"))
+        logs = subprocess.run(["docker", "logs", self.bridge], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True).stdout
+        assert "upstream-secret-do-not-echo" not in logs, "Malformed API value leaked into logs"
+        self.checks.append("malformed values are omitted from Bridge logs")
 
     def start_bridge(self):
         self.bridge = self.start("bridge", self.args.image, "-v", f"{self.bridge_dir}:/data", "-v", f"{self.directory}:/ssl:ro")
@@ -206,9 +267,41 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
                         "mqtt_source": "manual", "mqtt_host": "broker", "mqtt_port": 1883,
                         "poll_interval": 15, "stale_after": 180, "discovery_prefix": "homeassistant", "ha_status_topic": "homeassistant/status"}
         self.save_options()
+        if self.args.capture_fixtures:
+            self.capture_fixtures(reader_password, auth["record"]["id"], reader["id"])
         self.start_bridge()
         self.wait("Bridge persists stable Hub identity", lambda: (self.bridge_dir / "bridge-state.json").exists())
         self.namespace = json.loads((self.bridge_dir / "bridge-state.json").read_text())["namespace"]
+
+    def capture_fixtures(self, password, admin_id, reader_id):
+        api = self.hub_api
+        reader = api("/api/collections/users/auth-with-password", {"identity": "reader@example.test", "password": password})
+        token = reader["token"]
+        info = api("/api/beszel/info", token=token)
+        assert info["v"] == self.args.hub_version, "Hub is not running the requested release"
+        systems = api("/api/collections/systems/records?page=1&perPage=100&sort=id", token=token)
+        query = urllib.parse.urlencode({"filter": "system='" + self.system_id + "' && type='1m'", "sort": "-created", "perPage": 1})
+        samples = self.wait("readonly account can read a real source sample", lambda: self.source_sample(api, token, query))
+        replacements = {self.system_id: "sys000000000001", samples["items"][0]["id"]: "sta000000000001", admin_id: "usr000000000001", reader_id: "usr000000000002"}
+        def sanitize(value):
+            if isinstance(value, dict):
+                return {key: "example-host" if key == "host" else sanitize(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [sanitize(item) for item in value]
+            return replacements.get(value, value) if isinstance(value, str) else value
+        info["key"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixturePublicKeyForBridgeIdentityOnly"
+        for system in systems["items"]:
+            system["name"] = "Example server"
+        destination = self.args.capture_fixtures
+        destination.mkdir(parents=True, exist_ok=False)
+        for name, response in [("info", info), ("systems", systems), ("system_stats", samples)]:
+            (destination / (name + ".json")).write_text(json.dumps(sanitize(response), indent=2) + "\n")
+        print("PASS captured sanitized " + self.args.hub_version + " readonly API fixtures", flush=True)
+
+    @staticmethod
+    def source_sample(api, token, query):
+        response = api("/api/collections/system_stats/records?" + query, token=token)
+        return response if response.get("items") else None
 
     def setup_ha(self):
         # A full Core instance exercises its built-in MQTT integration and UI.
@@ -258,6 +351,7 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         self.save_options()
         self.start_bridge()
         self.wait("remote HTTPS base-path Hub with private CA", self.metric_ready)
+        self.data_fault_checks()
         # Require a new successful sync after restart, not a restored HA value.
         self.wait("remote Hub performs a successful sync", lambda: '"hub_connected":true' in self.docker("exec", self.bridge, "/usr/local/bin/bridge", "status").replace(" ", ""))
         assert identities == {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
@@ -311,10 +405,10 @@ def main():
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--build", action="store_true", help="Build the Bridge and a Hub app pinned to --hub-version first")
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--capture-fixtures", type=Path, help="Save sanitized readonly API responses in a new version directory")
     args = parser.parse_args()
-    policy = json.loads((ROOT / "beszel_bridge/compatibility.json").read_text())
-    if args.hub_version not in policy["hub_versions"]:
-        parser.error("Hub version has no verified Bridge compatibility fixtures: " + args.hub_version)
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?", args.hub_version):
+        parser.error("Expected a Hub release version such as 0.21.1")
     lab = Lab(args)
     try:
         if args.build:

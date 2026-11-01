@@ -4,22 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
 
 type healthStatus struct {
-	Alive         bool   `json:"alive"`
-	HubConnected  bool   `json:"hub_connected"`
-	MQTTConnected bool   `json:"mqtt_connected"`
-	Systems       int    `json:"systems"`
-	LastSync      string `json:"last_sync,omitempty"`
-	Error         string `json:"error,omitempty"`
+	Alive               bool   `json:"alive"`
+	HubConnected        bool   `json:"hub_connected"`
+	MQTTConnected       bool   `json:"mqtt_connected"`
+	Systems             int    `json:"systems"`
+	LastSync            string `json:"last_sync,omitempty"`
+	Error               string `json:"error,omitempty"`
+	DegradedSystems     int    `json:"degraded_systems,omitempty"`
+	InventoryIncomplete bool   `json:"inventory_incomplete,omitempty"`
 }
 type health struct {
 	mu     sync.Mutex
@@ -47,6 +52,7 @@ type service struct {
 	health    *health
 	now       func() time.Time
 	published map[string]string
+	warnings  map[string]string
 }
 
 func (s *service) diagnostics(info HubInfo) error {
@@ -113,7 +119,7 @@ func (s *service) sync(ctx context.Context) error {
 	if err = s.state.initialize(info, s.cfg.DiscoveryPrefix, s.state.Broker); err != nil {
 		return err
 	}
-	systems, err := s.hub.systems(ctx)
+	inventory, err := s.hub.systems(ctx)
 	if err != nil {
 		return err
 	}
@@ -121,9 +127,9 @@ func (s *service) sync(ctx context.Context) error {
 		return err
 	}
 	present := map[string]bool{}
-	count := 0
+	count, degraded := 0, 0
 	now := s.now()
-	for _, system := range systems {
+	for _, system := range inventory.Systems {
 		if err = ctx.Err(); err != nil {
 			return err
 		}
@@ -132,11 +138,22 @@ func (s *service) sync(ctx context.Context) error {
 			continue
 		}
 		count++
-		if err = s.syncSystem(ctx, system); err != nil {
+		err = s.syncSystem(ctx, system)
+		var dataErr *readingError
+		if err != nil && !errors.As(err, &dataErr) {
 			return err
 		}
+		if dataErr != nil {
+			degraded++
+		}
+		s.noteIssue(system.ID, err)
 	}
-	if err = s.reconcile(present, now); err != nil {
+	var inventoryErr error
+	if !inventory.Complete {
+		inventoryErr = errors.New(strings.Join(inventory.Issues, "\n"))
+	}
+	s.noteIssue("inventory", inventoryErr)
+	if err = s.reconcile(present, now, inventory.Complete); err != nil {
 		return err
 	}
 	if err = s.pub.publish(s.state.root()+"/hub/availability", "online", true); err != nil {
@@ -146,7 +163,7 @@ func (s *service) sync(ctx context.Context) error {
 		return err
 	}
 	s.health.mu.Lock()
-	announce := s.health.status.LastSync == "" || s.health.status.Error != "" || s.health.status.Systems != count
+	announce := s.health.status.LastSync == "" || !s.health.status.HubConnected || s.health.status.Systems != count || s.health.status.DegradedSystems != degraded
 	s.health.mu.Unlock()
 	if announce {
 		slog.Info("Bridge synchronized", "systems", count, "hub_version", info.Version)
@@ -156,9 +173,52 @@ func (s *service) sync(ctx context.Context) error {
 		h.MQTTConnected = true
 		h.Systems = count
 		h.LastSync = now.UTC().Format(time.RFC3339)
+		h.DegradedSystems = degraded
+		h.InventoryIncomplete = !inventory.Complete
 		h.Error = ""
+		if degraded > 0 {
+			h.Error = fmt.Sprintf("%d systems have unavailable or invalid readings", degraded)
+		}
+		if !inventory.Complete {
+			h.Error = strings.TrimSpace(h.Error + " incomplete Hub inventory")
+		}
 	})
+	for id := range s.warnings {
+		if id != "inventory" && !present[id] && inventory.Complete {
+			delete(s.warnings, id)
+		}
+	}
 	return nil
+}
+
+type readingError struct{ error }
+
+// Only log a changed issue set or a recovery, without API bodies or raw values.
+func (s *service) noteIssue(scope string, err error) {
+	if s.warnings == nil {
+		s.warnings = map[string]string{}
+	}
+	if err == nil {
+		if _, exists := s.warnings[scope]; exists {
+			delete(s.warnings, scope)
+			slog.Info("Hub data recovered", "scope", scope)
+		}
+		return
+	}
+	unique := map[string]bool{}
+	for _, issue := range strings.Split(err.Error(), "\n") {
+		unique[issue] = true
+	}
+	issues := make([]string, 0, len(unique))
+	for issue := range unique {
+		issues = append(issues, issue)
+	}
+	sort.Strings(issues)
+	message := strings.Join(issues, "; ")
+	if s.warnings[scope] != message {
+		s.warnings[scope] = message
+		slog.Warn("Some Hub data is unavailable", "scope", scope, "reason", message)
+	}
 }
 
 func (s *service) syncSystem(ctx context.Context, system System) error {
@@ -171,27 +231,37 @@ func (s *service) syncSystem(ctx context.Context, system System) error {
 			return err
 		}
 	}
+	var issues []error
+	for _, issue := range system.Issues {
+		issues = append(issues, errors.New(issue))
+	}
 	validStatus := system.Status == "up" || system.Status == "down" || system.Status == "paused" || system.Status == "pending"
-	if !validStatus {
-		return errors.New("Hub returned an unsupported system status")
+	statusAvailability := "offline"
+	if validStatus {
+		if err := s.pub.publish(s.state.hostRoot(system.ID)+"/system_status", system.Status, false); err != nil {
+			return err
+		}
+		statusAvailability = "online"
+	} else {
+		issues = append(issues, errors.New("missing or unsupported system status"))
 	}
-	if err := s.pub.publish(s.state.hostRoot(system.ID)+"/system_status", system.Status, false); err != nil {
-		return err
-	}
-	if err := s.pub.publish(s.state.hostRoot(system.ID)+"/system_status/availability", "online", true); err != nil {
+	if err := s.pub.publish(s.state.hostRoot(system.ID)+"/system_status/availability", statusAvailability, true); err != nil {
 		return err
 	}
 	sample, err := s.hub.latestSample(ctx, system.ID)
-	if err != nil {
-		return err
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
-	values, created, err := metricValues(system, sample)
 	if err != nil {
-		return err
+		issues = append(issues, err)
 	}
-	isFresh := system.Status == "up" && fresh(created, s.now(), s.cfg.StaleAfter)
+	values, created, valueErr := metricValues(system, sample)
+	if valueErr != nil {
+		issues = append(issues, valueErr)
+	}
+	isFresh := (system.Status == "up" || !validStatus) && fresh(created, s.now(), s.cfg.StaleAfter)
 	connection := ""
-	if isFresh {
+	if system.Status == "up" && isFresh {
 		connection = "ON"
 	} else if system.Status == "down" {
 		connection = "OFF"
@@ -231,10 +301,13 @@ func (s *service) syncSystem(ctx context.Context, system System) error {
 			return err
 		}
 	}
+	if issue := errors.Join(issues...); issue != nil {
+		return &readingError{issue}
+	}
 	return nil
 }
 
-func (s *service) reconcile(present map[string]bool, now time.Time) error {
+func (s *service) reconcile(present map[string]bool, now time.Time, complete bool) error {
 	for topic, entity := range s.state.Topics {
 		if entity.System == "" {
 			continue
@@ -244,11 +317,15 @@ func (s *service) reconcile(present map[string]bool, now time.Time) error {
 			delete(s.state.MissingSince, entity.System)
 		} else {
 			since, ok := s.state.MissingSince[entity.System]
-			if !ok {
-				since = now
-				s.state.MissingSince[entity.System] = now
+			if !complete {
+				delete(s.state.MissingSince, entity.System)
+			} else {
+				if !ok {
+					since = now
+					s.state.MissingSince[entity.System] = now
+				}
+				remove = remove || now.Sub(since) >= 5*time.Minute
 			}
-			remove = remove || now.Sub(since) >= 5*time.Minute
 			if err := s.pub.publish(s.state.hostRoot(entity.System)+"/"+entity.Metric+"/availability", "offline", true); err != nil {
 				return err
 			}
@@ -351,6 +428,13 @@ func run(ctx context.Context, c Config, dir, address string) error {
 }
 func (s *service) poll(ctx context.Context) {
 	if err := s.sync(ctx); err != nil {
+		// Failed inventories cannot count toward automatic discovery removal.
+		if len(s.state.MissingSince) > 0 {
+			s.state.MissingSince = map[string]time.Time{}
+			if saveErr := s.state.save(s.dir); saveErr != nil {
+				slog.Warn("Cannot reset inventory removal grace", "reason", saveErr)
+			}
+		}
 		_ = s.pub.publish(s.state.root()+"/hub/availability", "offline", true)
 		s.health.update(func(h *healthStatus) { h.HubConnected = false; h.Error = err.Error() })
 		if ctx.Err() == nil {
