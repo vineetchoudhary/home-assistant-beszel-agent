@@ -1,5 +1,6 @@
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/vineetchoudhary)
 [![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/vineetchoudhary)
+[![Build status](https://img.shields.io/github/actions/workflow/status/vineetchoudhary/home-assistant-beszel-agent/publish.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=build)](https://github.com/vineetchoudhary/home-assistant-beszel-agent/actions/workflows/publish.yml)
 [![Docker image downloads across all seven apps](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvineetchoudhary%2Fhome-assistant-beszel-agent%2Fbadges%2Fdownloads.json&style=for-the-badge&logo=docker&logoColor=white)](https://github.com/vineetchoudhary/home-assistant-beszel-agent/packages)
 
 # Beszel for Home Assistant
