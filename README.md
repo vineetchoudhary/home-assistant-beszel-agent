@@ -1,3 +1,7 @@
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/vineetchoudhary)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/vineetchoudhary)
+[![Docker image downloads across all seven apps](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvineetchoudhary%2Fhome-assistant-beszel-agent%2Fbadges%2Fdownloads.json&style=for-the-badge&logo=docker&logoColor=white)](https://github.com/vineetchoudhary/home-assistant-beszel-agent/packages)
+
 # Beszel for Home Assistant
 
 Monitor Home Assistant and other machines with [Beszel](https://github.com/henrygd/beszel). Run a Hub to view readings and an Agent on each monitored host.
@@ -28,3 +32,17 @@ See the [illustrated installation guide](docs/INSTALLATION.md) for the full setu
 - [Home Assistant dashboard setup](docs/dashboards/beszel/SETUP.md)
 
 [Report an issue](https://github.com/vineetchoudhary/home-assistant-beszel-agent/issues) · [Contributing](docs/CONTRIBUTING.md) · [MIT license](LICENSE)
+
+## Support
+
+If this project has been useful to you, consider supporting its continued development.
+
+<a href="https://github.com/sponsors/vineetchoudhary">
+  <img src="https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=github&logoColor=white" alt="Sponsor on GitHub" height="50">
+</a>
+
+<a href="https://buymeacoffee.com/vineetchoudhary">
+  <img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" height="50">
+</a>
+
+Thank you for supporting open source! 🙏

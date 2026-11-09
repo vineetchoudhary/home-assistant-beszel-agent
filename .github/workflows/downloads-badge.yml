@@ -1,0 +1,59 @@
+name: Update downloads badge
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # daily, 03:17 UTC
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/downloads-badge.yml'
+      - 'scripts/downloads-badge.py'
+      - 'beszel_*/config.yaml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: downloads-badge
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Sum downloads across all app images
+        run: python3 scripts/downloads-badge.py > "$RUNNER_TEMP/downloads.json"
+
+      - name: Write the badge file to the badges branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          remote="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          previous=""
+          if git clone -q --depth 1 --branch badges "$remote" out 2>/dev/null; then
+            previous=$(git -C out rev-parse HEAD)
+          else
+            git init -q out
+            git -C out checkout -q --orphan badges
+            git -C out remote add origin "$remote"
+          fi
+          cd out
+          cp "$RUNNER_TEMP/downloads.json" downloads.json
+          git add downloads.json
+          if git diff --cached --quiet && ! git cat-file -p HEAD | grep -q '^parent '; then
+            echo "Downloads badge is unchanged."
+            exit 0
+          fi
+          # Keep the generated-data branch at one commit, as in tuya-local-key.
+          count=$(python3 -c 'import json; print(json.load(open("downloads.json"))["message"])')
+          commit=$(git -c user.name="Developer Insider Bot" \
+              -c user.email="bot@developerinsider.co" \
+              commit-tree "$(git write-tree)" -m "Update downloads badge to $count")
+          git push -q --force-with-lease="refs/heads/badges:$previous" origin "$commit:refs/heads/badges"
