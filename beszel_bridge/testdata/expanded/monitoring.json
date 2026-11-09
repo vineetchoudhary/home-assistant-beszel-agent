@@ -1,0 +1,43 @@
+{
+  "description": "Synthetic capability fixture. Not captured from physical hardware. Times and identities are deterministic.",
+  "system": {
+    "id": "sys000000000001", "name": "Lab server", "status": "up", "updated": "2026-11-01 12:00:00.000Z",
+    "info": {"u": 72000, "v": "0.21.1", "ct": 2, "t": 2, "g": 35, "rdn": "System disk", "sv": [2, 1], "pu": [2, 1], "jl": true, "wf": {"wlan0": {"s": "Lab Wi-Fi", "r": -61}}}
+  },
+  "sample": {
+    "id": "sta000000000001", "system": "sys000000000001", "type": "1m", "created": "2026-11-01 12:00:00.000Z",
+    "stats": {
+      "cpu": 20, "mp": 25, "dp": 55, "m": 999, "mu": 999, "mem": [8589934592, 2147483648, 1073741824, 536870912], "swap": [1073741824, 0],
+      "d": 100, "du": 50, "dio": [100, 200], "diot": [9007199254740993, 18446744073709550000], "dios": [0.1, 0.2, 30, 2, 3, 40],
+      "efs": {"data": {"d": 900, "du": 90, "rb": 300, "wb": 400, "tr": 123456, "tw": 654321, "dios": [0, 0, 0, 0, 0, 0]}},
+      "cpub": [10, 2, 1, 0, 87, 0, 0, 0], "cpus": [10, 30], "la": [0.1, 0.2, 0.3],
+      "b": [100, 200], "ni": {"eth0": [100, 200, 9007199254740993, 22]},
+      "t": {"cpu_package": 40, "ambient": 0}, "f": {"cpu_fan": 1200}, "bat": [20, 4], "bats": {"BAT0": 20, "BAT1": 0}, "wf": {"wlan0": -61},
+      "g": {"gpu0": {"n": "Test GPU", "u": 35, "mu": 512, "mt": 2048, "p": 0, "pp": 25, "e": {"render": 35, "video": 0}}},
+      "z": {"tank": {"d": 1000, "du": 100, "rb": 500, "wb": 600, "h": "ONLINE"}}
+    }
+  },
+  "peak": {
+    "id": "sta000000000010", "system": "sys000000000001", "type": "10m", "created": "2026-11-01 11:50:00.000Z",
+    "stats": {"cpum": 95, "memm": 3221225472, "bm": [200, 400], "diom": [300, 400], "diosm": [0.3, 0.4, 50, 4, 5, 60], "efs": {"data": {"rbm": 1000, "wbm": 2000}}}
+  },
+  "smart_devices": [
+    {"id": "smt000000000001", "system": "sys000000000001", "name": "/dev/sda", "model": "CT1000BX500SSD1", "state": "PASSED", "capacity": 1000204886016, "temp": 32, "firmware": "M7CR023", "serial": "LAB-SATA", "type": "sat", "hours": 20, "cycles": 2, "updated": "2026-11-01 02:00:00.000Z", "attributes": [
+      {"id": 9, "n": "Power_On_Hours", "rv": 20, "v": 100, "w": 100, "t": 0, "rs": "20", "wf": ""},
+      {"id": 12, "n": "Power_Cycle_Count", "rv": 2},
+      {"id": 199, "n": "CRC_Error_Count", "rv": 9007199254740993, "rs": "9007199254740993"}
+    ]},
+    {"id": "smt000000000002", "system": "sys000000000001", "name": "/dev/nvme0", "model": "Unknown drive", "state": "UNKNOWN", "capacity": 0, "temp": 0, "type": "nvme", "hours": 0, "cycles": 0, "attributes": [], "updated": "2026-11-01 02:00:00.000Z"},
+    {"id": "smt000000000003", "system": "sys000000000001", "name": "/dev/nvme1", "model": "New drive", "state": "PASSED", "capacity": 1000000000, "temp": 0, "type": "nvme", "hours": 0, "cycles": 0, "attributes": [{"n": "PowerOnHours", "rv": 0}, {"n": "PowerCycles", "rv": 0}, {"n": "Temperature", "rv": 0}], "updated": "2026-11-01 02:00:00.000Z"}
+  ],
+  "containers": [{"id": "abcdef123456", "system": "sys000000000001", "name": "web", "image": "example/web:1", "ports": "127.0.0.1:8080", "status": "Up 20 hours", "health": 2, "cpu": 1.5, "memory": 128, "net": 300, "updatable": true, "updated": 1793534400000}],
+  "container_stats": [{"id": "cnt000000000001", "system": "sys000000000001", "type": "1m", "created": "2026-11-01 12:00:00.000Z", "stats": [{"n": "web", "c": 1.5, "m": 128, "b": [100, 200]}]}],
+  "systemd_services": [{"id": "svc000000000001", "system": "sys000000000001", "name": "example.service", "state": 2, "sub": 3, "cpu": 0, "cpuPeak": 1, "memory": 12345678, "memPeak": 23456789, "updated": 1793534400000}],
+  "zfs_pools": [{"id": "zfs000000000001", "system": "sys000000000001", "name": "tank", "display_name": "Storage", "health": "ONLINE", "status": "No errors", "size": 1073741824000, "alloc": 107374182400, "free": 966367641600, "raw": false, "updated": "2026-11-01 12:00:00.000Z", "details_updated": "2026-11-01 02:00:00.000Z", "scrub": {"state": "SCANNING", "progress": "10.00%"}, "vdevs": [{"name": "mirror-0", "state": "ONLINE", "readErrs": 1}], "datasets": [{"name": "tank/data", "used": 1000000, "avail": 9000000, "mount": "/data"}]}],
+  "network_monitors": [{"id": "net000000000001", "system": "sys000000000001", "target": "https://example.test", "protocol": "http", "port": 443, "interval": 600, "server": "", "skipTlsVerify": false, "enabled": true, "res": 1000, "resAvg1h": 2000, "resMin1h": 1000, "resMax1h": 3000, "loss1h": 25, "certInfo": {"expires": 1796126400000, "issuer": "Lab CA"}, "updated": "2026-11-01 12:00:00.000Z"}],
+  "network_monitor_stats": [{"id": "netstat00000001", "system": "sys000000000001", "monitor": "net000000000001", "type": "1m", "total_count": 4, "success_count": 3, "res_sum": 6000, "res_min": 1000, "res_max": 3000, "created": 1793534400000}],
+  "package_updates": {"manager": "apt", "checkedAt": 1793498400, "securityKnown": true, "packages": [{"name": "package-a", "current": "1", "available": "2", "security": true}, {"name": "package-b", "current": "3", "available": "4"}]},
+  "alerts": [{"id": "alt000000000001", "user": "usr000000000001", "system": "sys000000000001", "name": "CPU", "value": 80, "min": 5, "triggered": true, "state": {}, "pending_since": "", "updated": "2026-10-30 12:00:00.000Z"}],
+  "alerts_history": [{"id": "evt000000000001", "user": "usr000000000001", "system": "sys000000000001", "alert_id": "alt000000000001", "name": "CPU", "monitor_name": "", "value": 90, "created": "2026-10-30 12:00:00.000Z", "resolved": "2026-10-30 12:05:00.000Z"}],
+  "system_details": [{"id": "sys000000000001", "system": "sys000000000001", "hostname": "lab", "os": 0, "os_name": "Linux", "kernel": "6.12", "cpu": "Test CPU", "arch": "amd64", "cores": 1, "threads": 2, "sockets": 1, "memory": 8589934592, "podman": false, "updated": "2026-10-30 12:00:00.000Z"}]
+}

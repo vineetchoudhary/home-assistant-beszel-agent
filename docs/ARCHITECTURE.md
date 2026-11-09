@@ -24,4 +24,8 @@ The Hub's public SSH key and system IDs identify MQTT devices. Discovery message
 
 Bad readings and failed per-server requests affect only their sensors. Incomplete inventories preserve discovery. Connection, authentication and identity failures make Hub readings unavailable while the Bridge keeps retrying.
 
+Expanded adapters read current samples, native 10-minute peaks and independent inventories for SMART, containers, services, storage pools, probes, system details and account-owned alerts. Package inventory uses the Hub's read-only GET endpoint. At most four Hub requests run concurrently. MQTT publication and manifest writes are serialized. Component definitions extend the ownership manifest without changing original IDs or topics.
+
+Fast readings use source timestamps and normal freshness limits. SMART, pool details and package inventory have a separate age limit, while timestamps and readable ages explain old data. Components need five minutes of complete successful absence before discovery removal. Detailed entities are discovered disabled by default and user choices survive rediscovery.
+
 Hub backups stop the server for SQLite consistency. Bridge backups preserve identity and owned topics. See [Hub configuration](../beszel_hub/DOCS.md) and [Bridge setup](../beszel_bridge/DOCS.md).

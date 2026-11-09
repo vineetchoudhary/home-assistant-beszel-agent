@@ -49,6 +49,7 @@ func (system *System) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*system = System{ID: stringField(object, "id"), Name: stringField(object, "name"), Status: stringField(object, "status"), Updated: stringField(object, "updated")}
+	system.Raw = object
 	if system.Name == "" {
 		system.Name = system.ID
 	}
@@ -98,6 +99,7 @@ func (sample *Sample) UnmarshalJSON(data []byte) error {
 		sample.Issues = append(sample.Issues, "missing or invalid stats")
 		return nil
 	}
+	sample.RawStats = stats
 	sample.Stats.CPU = floatField(stats["cpu"])
 	sample.Stats.Memory = floatField(stats["mp"])
 	sample.Stats.Disk = floatField(stats["dp"])

@@ -7,6 +7,7 @@ This is test tooling, not a component installed in a user's Home Assistant.
 import argparse
 import asyncio
 import json
+import hashlib
 from pathlib import Path
 
 import aiohttp
@@ -17,6 +18,9 @@ async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dashboard", action="store_true")
     parser.add_argument("--customize", action="store_true", help="Rename the test CPU entity through HA's registry")
+    parser.add_argument("--enable-key", action="append", default=[], help="Enable a detailed test entity by its Bridge metric key")
+    parser.add_argument("--storage-dashboard", action="store_true", help="Import the storage template with the expanded fixture's actual entity IDs")
+    parser.add_argument("--reset-customizations", action="store_true", help="Restore the lab CPU entity's default name and ID for setup screenshots")
     args = parser.parse_args()
     settings = json.loads(Path("/config/bridge-test-auth.json").read_text())
     namespace = settings["namespace"]
@@ -37,6 +41,18 @@ async def main():
                 return result.get("result")
 
             registry = await command("config/entity_registry/list")
+            if args.reset_customizations:
+                cpu_id = namespace + "_" + settings["system_id"] + "_cpu_usage"
+                cpu = next(entity for entity in registry if entity["unique_id"] == cpu_id)
+                await command("config/entity_registry/update", entity_id=cpu["entity_id"],
+                              new_entity_id="sensor." + cpu_id, name=None)
+                registry = await command("config/entity_registry/list")
+            for key in args.enable_key:
+                unique_id = namespace + "_" + settings["system_id"] + "_" + key
+                entity = next(item for item in registry if item["unique_id"] == unique_id)
+                await command("config/entity_registry/update", entity_id=entity["entity_id"], disabled_by=None)
+            if args.enable_key:
+                registry = await command("config/entity_registry/list")
             if args.customize:
                 cpu_id = namespace + "_" + settings["system_id"] + "_cpu_usage"
                 cpu = next(entity for entity in registry if entity["platform"] == "mqtt" and entity["unique_id"] == cpu_id)
@@ -51,8 +67,9 @@ async def main():
                 all_states = await response.json()
             entity_ids = {entity["entity_id"] for entity in entities}
             states = {state["entity_id"]: state for state in all_states if state["entity_id"] in entity_ids}
-            if args.dashboard:
+            if args.dashboard or args.storage_dashboard:
                 mapping = {}
+                metric_entities = {}
                 for entity in entities:
                     unique_id = entity["unique_id"]
                     prefix = namespace + "_" + settings["system_id"] + "_"
@@ -60,6 +77,7 @@ async def main():
                         key = unique_id.removeprefix(prefix)
                         domain = entity["entity_id"].split(".")[0]
                         mapping[f"{domain}.beszel_server_{key}"] = entity["entity_id"]
+                        metric_entities[key] = entity["entity_id"]
                     bridge_prefix = namespace + "_bridge_"
                     if unique_id.startswith(bridge_prefix):
                         key = unique_id.removeprefix(bridge_prefix)
@@ -75,8 +93,19 @@ async def main():
                         return mapping.get(value, value.replace("BESZEL_HUB_URL", settings["hub_browser_url"]))
                     return value
 
+                templates = ["server-overview.yaml", "server-detail.yaml"]
+                if args.storage_dashboard:
+                    def component_key(family, identity, metric):
+                        return family + "_" + hashlib.sha256(identity.encode()).hexdigest()[:24] + "_" + metric
+                    aliases = {"extra_disk_usage": component_key("filesystems", "data", "usage")}
+                    for field in ("status", "capacity", "power_on_seconds", "power_on_human", "cycles", "temperature", "last_updated", "updated_human"):
+                        aliases["smart_" + field] = component_key("smart", "smt000000000001", field)
+                    for alias, metric in aliases.items():
+                        assert metric in metric_entities, "Storage template requires the expanded fixture's entities"
+                        mapping["sensor.beszel_server_" + alias] = metric_entities[metric]
+                    templates.append("storage-health.yaml")
                 views = []
-                for name in ("server-overview.yaml", "server-detail.yaml"):
+                for name in templates:
                     document = yaml.safe_load(Path("/repo/docs/dashboards/beszel/" + name).read_text())
                     views.extend(substitute(document)["views"])
                 path = "beszel-bridge-lab"

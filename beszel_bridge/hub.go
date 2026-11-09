@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 //go:embed compatibility.json
@@ -28,10 +29,11 @@ type HubInfo struct {
 	Version string `json:"v"`
 }
 type System struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Status  string `json:"status"`
-	Updated string `json:"updated"`
+	Raw     rawObject `json:"-"`
+	ID      string    `json:"id"`
+	Name    string    `json:"name"`
+	Status  string    `json:"status"`
+	Updated string    `json:"updated"`
 	Info    struct {
 		Uptime  *uint64 `json:"u"`
 		Version string  `json:"v"`
@@ -39,11 +41,12 @@ type System struct {
 	Issues []string `json:"-"`
 }
 type Sample struct {
-	ID      string `json:"id"`
-	System  string `json:"system"`
-	Type    string `json:"type"`
-	Created string `json:"created"`
-	Stats   struct {
+	RawStats rawObject `json:"-"`
+	ID       string    `json:"id"`
+	System   string    `json:"system"`
+	Type     string    `json:"type"`
+	Created  string    `json:"created"`
+	Stats    struct {
 		CPU          *float64             `json:"cpu"`
 		Memory       *float64             `json:"mp"`
 		Disk         *float64             `json:"dp"`
@@ -69,9 +72,12 @@ func (e *apiError) Error() string {
 }
 
 type Hub struct {
-	cfg    Config
-	client *http.Client
-	token  string
+	cfg     Config
+	client  *http.Client
+	token   string
+	tokenMu sync.RWMutex
+	authMu  sync.Mutex
+	slots   chan struct{}
 }
 
 func newHub(c Config) (*Hub, error) {
@@ -86,10 +92,16 @@ func newHub(c Config) (*Hub, error) {
 		}
 		return nil
 	}
-	return &Hub{cfg: c, client: client}, nil
+	return &Hub{cfg: c, client: client, slots: make(chan struct{}, 4)}, nil
 }
 
 func (h *Hub) raw(ctx context.Context, method, endpoint string, payload any, output any) error {
+	select {
+	case h.slots <- struct{}{}:
+		defer func() { <-h.slots }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	var reader io.Reader
 	if payload != nil {
 		b, err := json.Marshal(payload)
@@ -103,8 +115,8 @@ func (h *Hub) raw(ctx context.Context, method, endpoint string, payload any, out
 		return errors.New("cannot construct Hub API request")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if h.token != "" {
-		req.Header.Set("Authorization", h.token)
+	if token := h.sessionToken(); token != "" {
+		req.Header.Set("Authorization", token)
 	}
 	response, err := h.client.Do(req)
 	if err != nil {
@@ -149,21 +161,34 @@ func (h *Hub) authenticate(ctx context.Context, refresh bool) error {
 	if result.Token == "" {
 		return errors.New("Hub password login did not return a session; OAuth-only and interactive MFA logins are unsupported")
 	}
+	h.tokenMu.Lock()
 	h.token = result.Token
+	h.tokenMu.Unlock()
 	return nil
 }
 
 func (h *Hub) get(ctx context.Context, endpoint string, output any) error {
-	if h.token == "" {
+	h.authMu.Lock()
+	if h.sessionToken() == "" {
 		if err := h.authenticate(ctx, false); err != nil {
+			h.authMu.Unlock()
 			return err
 		}
 	}
+	token := h.sessionToken()
+	h.authMu.Unlock()
 	err := h.raw(ctx, "GET", endpoint, nil, output)
 	var api *apiError
 	if errors.As(err, &api) && api.Status == http.StatusUnauthorized {
+		h.authMu.Lock()
+		defer h.authMu.Unlock()
+		if h.sessionToken() != token {
+			return h.raw(ctx, "GET", endpoint, nil, output)
+		}
 		if refreshErr := h.authenticate(ctx, true); refreshErr != nil {
+			h.tokenMu.Lock()
 			h.token = ""
+			h.tokenMu.Unlock()
 			if loginErr := h.authenticate(ctx, false); loginErr != nil {
 				return loginErr
 			}
@@ -171,6 +196,12 @@ func (h *Hub) get(ctx context.Context, endpoint string, output any) error {
 		return h.raw(ctx, "GET", endpoint, nil, output)
 	}
 	return err
+}
+
+func (h *Hub) sessionToken() string {
+	h.tokenMu.RLock()
+	defer h.tokenMu.RUnlock()
+	return h.token
 }
 
 func (h *Hub) info(ctx context.Context) (HubInfo, error) {
@@ -248,7 +279,11 @@ func (h *Hub) systems(ctx context.Context) (Inventory, error) {
 }
 
 func (h *Hub) latestSample(ctx context.Context, id string) (*Sample, error) {
-	q := url.Values{"filter": {fmt.Sprintf("system='%s' && type='1m'", id)}, "sort": {"-created"}, "perPage": {"1"}}
+	return h.sample(ctx, id, "1m")
+}
+
+func (h *Hub) sample(ctx context.Context, id, kind string) (*Sample, error) {
+	q := url.Values{"filter": {fmt.Sprintf("system='%s' && type='%s'", id, kind)}, "sort": {"-created"}, "perPage": {"1"}}
 	var raw json.RawMessage
 	if err := h.get(ctx, "/api/collections/system_stats/records?"+q.Encode(), &raw); err != nil {
 		return nil, err
@@ -264,7 +299,7 @@ func (h *Hub) latestSample(ctx context.Context, id string) (*Sample, error) {
 	if json.Unmarshal(result.Items[0], &sample) != nil {
 		return nil, errors.New("Hub returned an invalid sample record")
 	}
-	if sample.System != id || sample.Type != "1m" {
+	if sample.System != id || sample.Type != kind {
 		return nil, errors.New("Hub sample does not match the requested system and interval")
 	}
 	return &sample, nil

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,11 @@ type publication struct {
 type recordingPublisher struct{ messages []publication }
 
 func (p *recordingPublisher) publish(topic string, payload any, retain bool) error {
+	if _, ok := payload.(string); !ok {
+		if _, ok := payload.([]byte); !ok {
+			return errors.New("publisher requires a string or byte payload")
+		}
+	}
 	value := fmt.Sprint(payload)
 	if bytes, ok := payload.([]byte); ok {
 		value = string(bytes)
@@ -52,6 +58,10 @@ func TestPublicationFreshnessDiscoveryAndCleanup(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/systems/records"):
 			respond(w, page[System]{Page: 1, TotalPages: 1, TotalItems: len(inventory), Items: inventory})
 		case strings.HasSuffix(r.URL.Path, "/system_stats/records"):
+			if strings.Contains(r.URL.Query().Get("filter"), "type='10m'") {
+				respond(w, page[Sample]{Page: 1, Items: []Sample{}})
+				return
+			}
 			respond(w, page[Sample]{Page: 1, TotalPages: 1, TotalItems: 1, Items: []Sample{sample}})
 		default:
 			http.NotFound(w, r)
@@ -115,7 +125,7 @@ func TestPublicationFreshnessDiscoveryAndCleanup(t *testing.T) {
 	if err := s.sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if p.last(configTopic) != "" || len(state.Topics) != 4 {
+	if p.last(configTopic) != "" || len(state.Topics) != 7 {
 		t.Error("confirmed removal did not clean only system discovery")
 	}
 	if err := state.removeEntity(p, s.dir, "homeassistant/sensor/unrelated/config"); err == nil {

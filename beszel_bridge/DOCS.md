@@ -4,7 +4,7 @@ Bring readings from a local or remote Beszel Hub into Home Assistant as MQTT dev
 
 ## Requirements
 
-- Home Assistant **2026.10.0 or newer** and a Beszel Hub.
+- Home Assistant **2026.10.1 or newer** and a Beszel Hub.
 - An MQTT broker connected to Home Assistant's MQTT integration.
 - A dedicated Hub account with a password and shared systems, preferably with the `readonly` role. Superuser credentials, Agent tokens, OAuth-only accounts and interactive MFA are unsupported.
 
@@ -30,7 +30,9 @@ Skip this if Home Assistant already uses your broker. Otherwise, open **Settings
 
 ![MQTT broker settings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/03-mqtt-broker.webp)
 
-![MQTT credentials and TLS settings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/04-mqtt-credentials.webp)
+![MQTT credentials and other settings](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/04-mqtt-credentials.webp)
+
+The example uses a local test broker. Enter your broker's own address and credentials; expand **Other settings** for certificate options.
 
 ### 3. Configure the Bridge
 
@@ -100,9 +102,11 @@ In Supervisor mode, manual host, port, credentials and TLS settings are ignored.
 | --- | --- | --- |
 | `include_systems` | `[]` | System record IDs to monitor. Empty selects all systems the account can access. |
 | `exclude_systems` | `[]` | System record IDs to omit. Exclusions take precedence. |
-| `metrics` | `[]` | Metric keys from the table below. Empty enables all supported readings. Status, connectivity and Bridge diagnostics are always included. |
+| `metrics` | `[]` | Individual keys or families below. Empty selects all supported readings. Status, connectivity and Bridge diagnostics are always included. Detailed entities are discovered disabled by default. |
 | `poll_interval` | `30` | Seconds between polls, from `15` to `300`. |
 | `stale_after` | `0` | Maximum sample age in seconds. `0` uses `max(180, 3 × poll_interval)`. Explicit values must meet that minimum and be at most `86400`. |
+| `detail_stale_after` | `172800` | Maximum age of SMART, pool details and package inventory in seconds. Default is 48 hours. Range `3600` to `31536000`. |
+| `disk_aggregate_exclude` | `[]` | System/filesystem pairs to omit from combined totals. Individual filesystem entities remain available. See the example below. |
 | `discovery_prefix` | `homeassistant` | Home Assistant's MQTT discovery prefix. Use letters, numbers, underscores or hyphens. Clean up before changing it. |
 | `ha_status_topic` | `homeassistant/status` | Home Assistant's MQTT birth topic. Match any custom setting. Must be nonempty, without wildcards. |
 | `cleanup` | `false` | Remove this Bridge's MQTT entities and exit. Follow the cleanup steps below, then restore `false`. |
@@ -130,9 +134,73 @@ metrics:
 | `uptime` | Uptime, seconds. |
 | `last_sample` | Source sample timestamp. |
 
-Missing or stale readings are unavailable. Freshness uses the Hub's source sample time, so polling more often does not make old data fresh. HA history starts when entities report. Older history stays in Beszel. Container, GPU, S.M.A.R.T. and extra filesystem entities are not available.
+These original keys and identities remain supported. Selecting a family includes its corresponding original readings. Selecting only an original key retains its narrow selection.
 
-Renaming a server or changing the same Hub's URL preserves its devices. HA entity customizations also survive restarts. Excluded systems are removed at the next successful sync. Inaccessible systems are removed after five minutes of complete, successful inventory checks. Incomplete or malformed inventories preserve existing devices.
+### Metric families
+
+| Family selector | Readings and metadata |
+| --- | --- |
+| `cpu` | Overall/per-core usage, user/system/I/O wait/steal/idle/IRQ/soft IRQ/nice percentages, 1/5/15-minute load averages and native 10-minute usage peak. |
+| `memory` | Usage percentage, total/used/free bytes, buffer/cache, ZFS ARC and native 10-minute peak used memory. Free is total minus used, rather than the OS's raw free-memory counter. |
+| `swap` | Total/used/free bytes and usage percentage when capacity is positive. |
+| `filesystems` | Primary and extra filesystem capacity/used/free bytes and usage percentage, plus combined capacity/used/free/usage. |
+| `disk_io` | Primary/extra filesystem read/write rates and cumulative byte counters, read/write time factors, utilization, read/write latency, weighted I/O and native 10-minute peaks. |
+| `network` | Aggregate receive/transmit and combined bandwidth, native 10-minute peaks, each interface's receive/transmit rates and cumulative byte counters. |
+| `temperatures` | Highest observed temperature and every named temperature sensor, including GPU sensors reported in the temperature map. |
+| `fans` | Each named fan's RPM. |
+| `gpus` | Highest GPU utilization, each GPU's utilization, memory used/total/free/percentage, power/package power and engine utilization. Model and source identity are attributes. |
+| `batteries` | Representative battery percentage/state and each named battery's percentage. The Hub does not supply a separate charge state for every battery. |
+| `wifi` | Signal strength in dBm per interface, with interface identity and SSID when available. |
+| `smart` | Per-disk status, capacity, power-on seconds/readable duration, cycles, temperature, update timestamp and numeric/readable update age. Device/model/type/firmware/serial are status attributes. |
+| `smart_attributes` | Every reported SMART raw attribute, with source name/ID, normalized value, worst value, threshold, raw string and failure flag. Exact raw integers also appear in the `raw_value` string attribute. |
+| `containers` | Per-container status, health, CPU, memory, receive/transmit rates, combined bandwidth, image-update availability and last update. Name, ID, image and ports are attributes. |
+| `services` | Total/failed service counts and each systemd service's state/substate, current/peak CPU, current/peak memory and last update. |
+| `storage_pools` | ZFS/Btrfs pool health/advisory, capacity/allocated/free bytes, usage, read/write rates, scrub state/progress/errors and detail-update time. Per-vdev state/read/write/checksum errors and per-dataset used/available bytes retain source names and mount metadata. |
+| `network_monitors` | Probe response average/minimum/maximum, packet loss, hourly summaries, current-window probe/success counts, response sum and sample timestamp. HTTPS certificate expiry/days remaining/issuer and target/protocol/port/DNS/interval/enabled/TLS metadata when available. |
+| `package_updates` | Total/security update counts, update availability, last-check timestamp/age and the complete package inventory as attributes, including installed/available versions and security classification. |
+| `alerts` | Only the Bridge account's triggered alerts, active count, latest event and that event's resolution. Threshold, duration, pending state and event values are attributes. |
+| `system_info` | Uptime/source timestamp, Agent version/connection and system-information attributes: hostname, OS, kernel, architecture, CPU model, cores/threads/sockets, installed memory, container runtime and advertised capabilities. |
+| `uptime_human` | Additional readable uptime alongside the original seconds entity. |
+
+The Bridge device also exposes monitored/degraded system counts and an incomplete-inventory indicator. Sample age is an optional diagnostic entity on each server. These diagnostics are always selected.
+
+Existing entities, readable uptime, extra filesystem usage, combined storage overview and SMART overview entities are enabled by default. Other new entities are discovered disabled. Open the server under **Settings > Devices & services > MQTT** and enable a detailed entity in its settings. Home Assistant remembers that choice across rediscovery and restarts. See the [illustrated entity and dashboard setup](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/dashboards/beszel/SETUP.md) for the steps.
+
+Expanded readings have a `source_timestamp` attribute. Sizes use bytes, rates use `B/s`, latencies use milliseconds and temperatures use °C. Native bytes take precedence over legacy GiB/MiB fields. Home Assistant handles cumulative counter resets. Vendor SMART attributes retain their source encoding without guessed units or statistics classes.
+
+### Multiple disks and SMART
+
+The original `disk_usage` remains primary filesystem usage. Each extra filesystem gets its own entity. Combined usage is `100 × sum(used) / sum(capacity)` from one source sample. Missing or invalid capacity/usage makes the aggregate unavailable.
+
+Combined capacity describes monitored filesystems. The Hub lacks a complete physical-disk map, so overlapping mounts or shared datasets can count storage twice. SMART capacities and storage pools stay out of the sum. Exclude overlaps using source keys from the filesystem entity's attributes. Use `root` for the primary filesystem:
+
+```yaml
+disk_aggregate_exclude:
+  - system: "abc123def456ghi"
+    filesystem: "data-backup"
+```
+
+SMART entities describe physical devices independently from filesystem usage. A status entity can show `PASSED`, with `/dev/sda`, `CT1000BX500SSD1` and `sat` in its attributes. Numeric entities provide capacity, temperature, cycles and power-on seconds. Readable entities show values such as `20 hours` and `10 hours ago`.
+
+Select the status sensor, then **⋮ > Details**, to view its disk metadata. The [storage dashboard template](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/dashboards/beszel/storage-health.yaml) groups filesystem usage, SMART health and raw/readable uptime. The example below is captured from Home Assistant using controlled test readings.
+
+![Storage, SMART health and uptime dashboard](https://raw.githubusercontent.com/vineetchoudhary/home-assistant-beszel-agent/main/docs/screenshots/beszel-bridge/storage-desktop.webp)
+
+SMART seconds are converted from the Hub's hours value. `source_precision_seconds: 3600` records that limit. Unsupported power metrics are not created from default zeros. Reported attributes provide evidence for legitimate zero hours/cycles. Missing health data never becomes passed.
+
+Readable durations use whole seconds, minutes, hours, days below 60 days, approximate 30-day months below a year, then 365-day years. Examples: `10 mins`, `20 hours`, `1 day`, `30 days`, `6 months`, `1 year` and `10 years`.
+
+### Freshness and availability
+
+Missing or stale readings are unavailable. Source time determines freshness, so frequent polls do not make old data fresh. Current telemetry uses `1m` samples. Peak entities use the latest native `10m` rollup with at least 30 minutes allowed for that interval. Probe freshness allows three configured intervals, with `stale_after` as the minimum. Failed probes do not report zero latency.
+
+SMART, pool details and package inventory use `detail_stale_after`. SMART/pool records are checked every `max(60, poll_interval)` seconds, package inventory every five minutes. The Bridge reads stored SMART data without requesting scans. Timestamps and ages remain readable to explain old data. Pool details use `details_updated`, separately from current metrics. Security-update counts are unavailable when classification is unknown.
+
+Expanded entities stay under their server device. Hub record IDs identify record-backed components. Source-map keys identify filesystems, interfaces and sensors. Display-name changes preserve identity when the source identity stays the same. A changed source-map key creates a replacement component.
+
+HA history starts when entities report. Older history stays in Beszel. Live container inspection, extended service runtime inspection, logs, administrative diagnostics and control actions are outside this monitoring interface.
+
+Renaming a server or changing the same Hub's URL preserves devices and HA customizations. Excluded systems are removed at the next successful sync. Inaccessible systems and absent components are removed after five minutes of complete successful inventory checks. Incomplete or malformed inventories preserve discovery. An unavailable optional collection affects its readings while other valid data continues.
 
 ## Troubleshooting
 

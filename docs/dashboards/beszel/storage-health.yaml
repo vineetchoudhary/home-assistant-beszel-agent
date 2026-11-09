@@ -1,0 +1,50 @@
+title: Beszel storage
+views:
+  - title: Storage and SMART
+    path: storage
+    icon: mdi:harddisk
+    cards:
+      - type: entities
+        title: Monitored filesystems
+        show_header_toggle: false
+        entities:
+          - entity: sensor.beszel_server_disk_usage
+            name: Primary filesystem
+          - entity: sensor.beszel_server_extra_disk_usage
+            name: Data filesystem
+          - entity: sensor.beszel_server_filesystems_combined_usage
+            name: Combined usage
+          - entity: sensor.beszel_server_filesystems_combined_capacity
+            name: Combined capacity
+          - entity: sensor.beszel_server_filesystems_combined_used
+            name: Combined used
+          - entity: sensor.beszel_server_filesystems_combined_free
+            name: Combined free
+      - type: entities
+        title: SMART disk health
+        show_header_toggle: false
+        entities:
+          - entity: sensor.beszel_server_smart_status
+            name: Overall status
+          - entity: sensor.beszel_server_smart_capacity
+            name: Capacity
+          - entity: sensor.beszel_server_smart_temperature
+            name: Temperature
+          - entity: sensor.beszel_server_smart_power_on_seconds
+            name: Power on
+          - entity: sensor.beszel_server_smart_power_on_human
+            name: Power on readable
+          - entity: sensor.beszel_server_smart_cycles
+            name: Power cycles
+          - entity: sensor.beszel_server_smart_last_updated
+            name: Last updated
+          - entity: sensor.beszel_server_smart_updated_human
+            name: Update age
+      - type: entities
+        title: System uptime
+        show_header_toggle: false
+        entities:
+          - entity: sensor.beszel_server_uptime
+            name: Uptime
+          - entity: sensor.beszel_server_uptime_human
+            name: Uptime readable

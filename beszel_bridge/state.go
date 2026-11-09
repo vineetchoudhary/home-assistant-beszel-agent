@@ -14,8 +14,11 @@ import (
 )
 
 type ownedEntity struct {
-	System string `json:"system"`
-	Metric string `json:"metric"`
+	System     string            `json:"system"`
+	Metric     string            `json:"metric"`
+	Family     string            `json:"family,omitempty"`
+	Component  string            `json:"component,omitempty"`
+	Definition *entityDefinition `json:"definition,omitempty"`
 }
 
 func acquireLock(dir string) (func(), error) {
@@ -34,16 +37,17 @@ func acquireLock(dir string) (func(), error) {
 }
 
 type State struct {
-	Namespace       string                 `json:"namespace"`
-	HubKeyHash      string                 `json:"hub_key_hash"`
-	DiscoveryPrefix string                 `json:"discovery_prefix"`
-	Topics          map[string]ownedEntity `json:"topics"`
-	MissingSince    map[string]time.Time   `json:"missing_since"`
-	Broker          string                 `json:"broker"`
+	Namespace        string                 `json:"namespace"`
+	HubKeyHash       string                 `json:"hub_key_hash"`
+	DiscoveryPrefix  string                 `json:"discovery_prefix"`
+	Topics           map[string]ownedEntity `json:"topics"`
+	MissingSince     map[string]time.Time   `json:"missing_since"`
+	ComponentMissing map[string]time.Time   `json:"component_missing,omitempty"`
+	Broker           string                 `json:"broker"`
 }
 
 func loadState(dir string) (*State, error) {
-	s := &State{Topics: map[string]ownedEntity{}, MissingSince: map[string]time.Time{}}
+	s := &State{Topics: map[string]ownedEntity{}, MissingSince: map[string]time.Time{}, ComponentMissing: map[string]time.Time{}}
 	data, err := os.ReadFile(filepath.Join(dir, "bridge-state.json"))
 	if os.IsNotExist(err) {
 		return s, nil
@@ -62,6 +66,9 @@ func loadState(dir string) (*State, error) {
 	}
 	if s.MissingSince == nil {
 		s.MissingSince = map[string]time.Time{}
+	}
+	if s.ComponentMissing == nil {
+		s.ComponentMissing = map[string]time.Time{}
 	}
 	return s, nil
 }

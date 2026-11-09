@@ -17,25 +17,32 @@ import (
 )
 
 type Config struct {
-	Cleanup         bool     `json:"cleanup"`
-	HubURL          string   `json:"hub_url"`
-	HubEmail        string   `json:"hub_email"`
-	HubPassword     string   `json:"hub_password"`
-	HubCAFile       string   `json:"hub_ca_file"`
-	MQTTSource      string   `json:"mqtt_source"`
-	MQTTHost        string   `json:"mqtt_host"`
-	MQTTPort        int      `json:"mqtt_port"`
-	MQTTUsername    string   `json:"mqtt_username"`
-	MQTTPassword    string   `json:"mqtt_password"`
-	MQTTTLS         bool     `json:"mqtt_tls"`
-	MQTTCAFile      string   `json:"mqtt_ca_file"`
-	IncludeSystems  []string `json:"include_systems"`
-	ExcludeSystems  []string `json:"exclude_systems"`
-	Metrics         []string `json:"metrics"`
-	PollInterval    int      `json:"poll_interval"`
-	StaleAfter      int      `json:"stale_after"`
-	DiscoveryPrefix string   `json:"discovery_prefix"`
-	HAStatusTopic   string   `json:"ha_status_topic"`
+	Cleanup              bool            `json:"cleanup"`
+	HubURL               string          `json:"hub_url"`
+	HubEmail             string          `json:"hub_email"`
+	HubPassword          string          `json:"hub_password"`
+	HubCAFile            string          `json:"hub_ca_file"`
+	MQTTSource           string          `json:"mqtt_source"`
+	MQTTHost             string          `json:"mqtt_host"`
+	MQTTPort             int             `json:"mqtt_port"`
+	MQTTUsername         string          `json:"mqtt_username"`
+	MQTTPassword         string          `json:"mqtt_password"`
+	MQTTTLS              bool            `json:"mqtt_tls"`
+	MQTTCAFile           string          `json:"mqtt_ca_file"`
+	IncludeSystems       []string        `json:"include_systems"`
+	ExcludeSystems       []string        `json:"exclude_systems"`
+	Metrics              []string        `json:"metrics"`
+	PollInterval         int             `json:"poll_interval"`
+	StaleAfter           int             `json:"stale_after"`
+	DetailStaleAfter     int             `json:"detail_stale_after"`
+	DiskAggregateExclude []diskExclusion `json:"disk_aggregate_exclude"`
+	DiscoveryPrefix      string          `json:"discovery_prefix"`
+	HAStatusTopic        string          `json:"ha_status_topic"`
+}
+
+type diskExclusion struct {
+	System     string `json:"system"`
+	Filesystem string `json:"filesystem"`
 }
 
 var topicPart = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
@@ -79,6 +86,17 @@ func (c *Config) validate() error {
 	if c.StaleAfter < minimumStale || c.StaleAfter > 86400 {
 		return fmt.Errorf("stale_after must be at least %d seconds and at most 86400", minimumStale)
 	}
+	if c.DetailStaleAfter == 0 {
+		c.DetailStaleAfter = 172800
+	}
+	if c.DetailStaleAfter < 3600 || c.DetailStaleAfter > 31536000 {
+		return errors.New("detail_stale_after must be between 3600 and 31536000 seconds")
+	}
+	for _, exclusion := range c.DiskAggregateExclude {
+		if !recordID.MatchString(exclusion.System) || exclusion.Filesystem == "" || len(exclusion.Filesystem) > 1024 {
+			return errors.New("disk_aggregate_exclude requires a system ID and filesystem key")
+		}
+	}
 	if !topicPart.MatchString(c.DiscoveryPrefix) {
 		return errors.New("discovery_prefix must contain only letters, numbers, underscores or hyphens")
 	}
@@ -91,7 +109,7 @@ func (c *Config) validate() error {
 		}
 	}
 	for _, key := range c.Metrics {
-		if _, ok := metricDefinitions[key]; !ok {
+		if _, ok := metricDefinitions[key]; !ok && !metricFamilies[key] {
 			return fmt.Errorf("unsupported metric selection: %q", key)
 		}
 	}
@@ -136,11 +154,27 @@ func (c Config) enabled(key string) bool {
 		return true
 	}
 	for _, metric := range c.Metrics {
-		if metric == key {
+		if metric == key || metric == legacyFamilies[key] {
 			return true
 		}
 	}
 	return false
+}
+
+func (c Config) detailExpiry() int {
+	if c.DetailStaleAfter == 0 {
+		return 172800
+	}
+	return c.DetailStaleAfter
+}
+
+func (c Config) aggregateIncludes(system, filesystem string) bool {
+	for _, exclusion := range c.DiskAggregateExclude {
+		if exclusion.System == system && exclusion.Filesystem == filesystem {
+			return false
+		}
+	}
+	return true
 }
 
 func tlsConfig(caFile string) (*tls.Config, error) {

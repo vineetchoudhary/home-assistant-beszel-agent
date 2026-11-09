@@ -18,7 +18,13 @@ views:
           - entity: sensor.beszel_server_disk_usage
             name: Disk usage
           - entity: sensor.beszel_server_uptime
+            name: Uptime seconds
+          - entity: sensor.beszel_server_uptime_human
             name: Uptime
+          - entity: sensor.beszel_server_filesystems_combined_usage
+            name: Combined filesystem usage
+          - entity: sensor.beszel_server_filesystems_combined_free
+            name: Combined filesystem free
           - entity: sensor.beszel_server_last_sample
             name: Last sample
       - type: history-graph

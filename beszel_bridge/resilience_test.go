@@ -163,6 +163,10 @@ func newResilienceLab(t *testing.T) *resilienceLab {
 				respond(w, page[System]{Page: 1, TotalPages: 1, TotalItems: len(lab.systems), Items: lab.systems})
 			}
 		case strings.HasSuffix(r.URL.Path, "/system_stats/records"):
+			if strings.Contains(r.URL.Query().Get("filter"), "type='10m'") {
+				respond(w, page[Sample]{Page: 1, Items: []Sample{}})
+				return
+			}
 			for _, system := range []System{first, second} {
 				if strings.Contains(r.URL.Query().Get("filter"), system.ID) {
 					if lab.malformedSample == system.ID {

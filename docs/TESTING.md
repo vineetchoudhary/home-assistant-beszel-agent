@@ -31,11 +31,19 @@ python3 scripts/test-bridge-e2e.py --build --hub-version 0.21.1
 
 The first command runs Go tests, vet, formatting and amd64/arm64 compilation. The end-to-end commands run Hub, Agent, MQTT and Home Assistant containers to check entities, dashboards, malformed fields, newer version metadata, outages, restarts and cleanup.
 
+Expanded tests cover disk aggregation/exclusions, SMART status/precision, large counters, hardware maps, containers/services, pool details, probe failures, package classification, account-owned alerts, discovery defaults and component-removal grace. The [expanded fixture](../beszel_bridge/testdata/expanded/monitoring.json) is synthetic and does not claim physical-hardware validation. Real-stack tests inject those responses through the authenticated HTTPS test proxy and verify the actual Bridge, MQTT integration, registry and states, including enabling disabled details.
+
 `--build` builds the Bridge and the selected Hub version without changing repository pins. If `--hub-version` is omitted, the Hub's pin is used. Any release version can be tested. The [compatibility file](../beszel_bridge/compatibility.json) records coverage and does not restrict runtime versions.
 
 Add `--report .artifacts/bridge/report.json` to save results. `--keep` retains the environment and prints its URLs, container names, network and temporary directory. Remove those resources when finished. Otherwise cleanup is automatic.
 
 Add `--capture-fixtures .artifacts/bridge/fixtures/0.21.1` to capture sanitized readonly API responses in a new directory. Review them before adding fixtures and recording tested versions.
+
+### Setup screenshots
+
+Run `python3 scripts/test-bridge-e2e.py --build --keep --prepare-screenshots --report .artifacts/bridge/screenshots/session.json` to complete the real-stack checks and leave a local Home Assistant instance with controlled example disk/SMART data. The report records its URL, container names and temporary directory without credentials. Use the test login defined in `setup_ha` to verify the UI and capture screenshots. The screenshot preparation also imports all three dashboard templates using actual test entity IDs.
+
+Capture real browser screens for MQTT devices, enabling a detailed entity, SMART attributes and desktop/mobile dashboards. Keep passwords, tokens and production data out of images. Identify the hardware readings as synthetic examples. Close the browser tab and remove only the retained test containers, network and temporary directory after capture. Container screenshots do not validate Supervisor installation or physical SMART hardware.
 
 ### Bridge fixtures
 
@@ -66,4 +74,4 @@ Inside a running Bridge container:
 
 ## Continuous integration
 
-The [validation workflow](../.github/workflows/validate.yml) runs static and Agent SSH authentication checks on relevant changes. Its manual full run adds builds for every app, startup checks, mock Supervisor and end-to-end tests. Containers do not cover Supervisor installation or physical hardware. Use the [HA OS checklist](MANUAL_CHECKLIST.md) to record those checks separately.
+The [validation workflow](../.github/workflows/validate.yml) runs static and Agent SSH authentication checks on relevant changes. Its manual full run adds builds for every app, startup checks, mock Supervisor, Agent/Hub end-to-end tests and a Bridge/Home Assistant matrix for Hub 0.20.0, 0.21.0 and 0.21.1. Containers do not cover Supervisor installation or physical hardware. Use the [HA OS checklist](MANUAL_CHECKLIST.md) to record those checks separately.

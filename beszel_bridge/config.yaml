@@ -36,6 +36,8 @@ options:
   metrics: []
   poll_interval: 30
   stale_after: 0
+  detail_stale_after: 172800
+  disk_aggregate_exclude: []
   discovery_prefix: homeassistant
   ha_status_topic: homeassistant/status
 schema:
@@ -56,8 +58,12 @@ schema:
   exclude_systems:
     - match(^[a-z0-9]{15}$)
   metrics:
-    - list(cpu_usage|memory_usage|disk_usage|temperature|network_receive|network_transmit|uptime|last_sample)
+    - list(cpu_usage|memory_usage|disk_usage|temperature|network_receive|network_transmit|uptime|last_sample|cpu|memory|swap|filesystems|disk_io|network|temperatures|fans|gpus|batteries|wifi|smart|smart_attributes|containers|services|storage_pools|network_monitors|package_updates|alerts|system_info|uptime_human)
   poll_interval: int(15,300)
   stale_after: int(0,86400)
+  detail_stale_after: int(3600,31536000)
+  disk_aggregate_exclude:
+    - system: match(^[a-z0-9]{15}$)
+      filesystem: str
   discovery_prefix: match(^[A-Za-z0-9_-]+$)
   ha_status_topic: str

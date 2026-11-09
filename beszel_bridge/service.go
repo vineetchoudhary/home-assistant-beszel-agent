@@ -44,22 +44,23 @@ func (h *health) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 type service struct {
-	cfg       Config
-	dir       string
-	hub       *Hub
-	state     *State
-	pub       publisher
-	health    *health
-	now       func() time.Time
-	published map[string]string
-	warnings  map[string]string
+	cfg         Config
+	dir         string
+	hub         *Hub
+	state       *State
+	pub         publisher
+	health      *health
+	now         func() time.Time
+	published   map[string]string
+	warnings    map[string]string
+	collections map[string]collectionResult
 }
 
 func (s *service) diagnostics(info HubInfo) error {
 	device := map[string]any{"identifiers": []string{s.state.Namespace}, "name": "Beszel Bridge", "manufacturer": "Beszel", "model": "Home Assistant MQTT bridge", "sw_version": version}
-	for _, key := range []string{"bridge_connected", "hub_connected", "last_sync", "hub_version"} {
+	for _, key := range []string{"bridge_connected", "hub_connected", "last_sync", "hub_version", "monitored_systems", "degraded_systems", "inventory_incomplete"} {
 		domain := "sensor"
-		name := map[string]string{"bridge_connected": "Bridge connected", "hub_connected": "Hub connected", "last_sync": "Last successful sync", "hub_version": "Hub version"}[key]
+		name := map[string]string{"bridge_connected": "Bridge connected", "hub_connected": "Hub connected", "last_sync": "Last successful sync", "hub_version": "Hub version", "monitored_systems": "Monitored systems", "degraded_systems": "Degraded systems", "inventory_incomplete": "Inventory incomplete"}[key]
 		stateTopic := s.state.root() + "/" + key
 		if key == "bridge_connected" {
 			domain = "binary_sensor"
@@ -69,6 +70,9 @@ func (s *service) diagnostics(info HubInfo) error {
 			domain = "binary_sensor"
 			stateTopic = s.state.root() + "/hub/availability"
 		}
+		if key == "inventory_incomplete" {
+			domain = "binary_sensor"
+		}
 		topic := s.state.discoveryTopic(domain, "bridge", key)
 		payload := map[string]any{"name": name, "unique_id": s.state.Namespace + "_bridge_" + key, "default_entity_id": domain + "." + s.state.Namespace + "_bridge_" + key,
 			"device": device, "entity_category": "diagnostic", "state_topic": stateTopic}
@@ -76,6 +80,14 @@ func (s *service) diagnostics(info HubInfo) error {
 			payload["device_class"] = "connectivity"
 			payload["payload_on"] = "online"
 			payload["payload_off"] = "offline"
+		}
+		if key == "inventory_incomplete" {
+			payload["device_class"] = "problem"
+			payload["payload_on"] = "ON"
+			payload["payload_off"] = "OFF"
+		}
+		if key == "monitored_systems" || key == "degraded_systems" {
+			payload["state_class"] = "measurement"
 		}
 		if key != "bridge_connected" {
 			payload["availability_topic"] = s.state.root() + "/availability"
@@ -161,6 +173,11 @@ func (s *service) sync(ctx context.Context) error {
 	}
 	if err = s.pub.publish(s.state.root()+"/last_sync", now.UTC().Format(time.RFC3339), false); err != nil {
 		return err
+	}
+	for key, value := range map[string]any{"monitored_systems": count, "degraded_systems": degraded, "inventory_incomplete": map[bool]string{true: "ON", false: "OFF"}[!inventory.Complete]} {
+		if err = s.pub.publish(s.state.root()+"/"+key, fmt.Sprint(value), false); err != nil {
+			return err
+		}
 	}
 	s.health.mu.Lock()
 	announce := s.health.status.LastSync == "" || !s.health.status.HubConnected || s.health.status.Systems != count || s.health.status.DegradedSystems != degraded
@@ -301,6 +318,14 @@ func (s *service) syncSystem(ctx context.Context, system System) error {
 			return err
 		}
 	}
+	expanded := s.expandedTelemetry(ctx, system, sample)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err = s.publishTelemetry(system, expanded); err != nil {
+		return err
+	}
+	issues = append(issues, expanded.issues...)
 	if issue := errors.Join(issues...); issue != nil {
 		return &readingError{issue}
 	}
@@ -312,7 +337,11 @@ func (s *service) reconcile(present map[string]bool, now time.Time, complete boo
 		if entity.System == "" {
 			continue
 		}
-		remove := !s.cfg.selected(entity.System) || (entity.Metric != "system_status" && entity.Metric != "connectivity" && !s.cfg.enabled(entity.Metric))
+		selector := entity.Metric
+		if entity.Family != "" {
+			selector = entity.Family
+		}
+		remove := !s.cfg.selected(entity.System) || (entity.Metric != "system_status" && entity.Metric != "connectivity" && selector != "diagnostics" && !s.cfg.enabled(selector))
 		if present[entity.System] {
 			delete(s.state.MissingSince, entity.System)
 		} else {
@@ -335,6 +364,24 @@ func (s *service) reconcile(present map[string]bool, now time.Time, complete boo
 				return err
 			}
 			delete(s.published, topic)
+		}
+	}
+	remaining := map[string]bool{}
+	for _, entity := range s.state.Topics {
+		if entity.System != "" {
+			remaining[entity.System] = true
+		}
+	}
+	for key := range s.state.ComponentMissing {
+		system, _, _ := strings.Cut(key, "/")
+		if !remaining[system] {
+			delete(s.state.ComponentMissing, key)
+		}
+	}
+	for key := range s.collections {
+		system, _, _ := strings.Cut(key, ":")
+		if !s.cfg.selected(system) || (!present[system] && !remaining[system]) {
+			delete(s.collections, key)
 		}
 	}
 	return s.state.save(s.dir)
@@ -433,6 +480,12 @@ func (s *service) poll(ctx context.Context) {
 			s.state.MissingSince = map[string]time.Time{}
 			if saveErr := s.state.save(s.dir); saveErr != nil {
 				slog.Warn("Cannot reset inventory removal grace", "reason", saveErr)
+			}
+		}
+		if len(s.state.ComponentMissing) > 0 {
+			s.state.ComponentMissing = map[string]time.Time{}
+			if saveErr := s.state.save(s.dir); saveErr != nil {
+				slog.Warn("Cannot reset component removal grace", "reason", saveErr)
 			}
 		}
 		_ = s.pub.publish(s.state.root()+"/hub/availability", "offline", true)

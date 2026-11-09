@@ -75,5 +75,24 @@ jobs:
       - name: End-to-end test (Hub + every Agent)
         run: ./scripts/test-e2e.sh --all-agents
 
-      - name: Bridge to real Home Assistant entity and dashboard tests
-        run: python3 scripts/test-bridge-e2e.py --build --hub-version "$(cat beszel_hub/beszel_version)"
+  bridge-integration:
+    name: Bridge and Home Assistant (Hub ${{ matrix.hub }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.full
+    strategy:
+      fail-fast: false
+      matrix:
+        hub: ["0.20.0", "0.21.0", "0.21.1"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Bridge entities, hardware fixtures and dashboards
+        run: python3 scripts/test-bridge-e2e.py --build --hub-version "${{ matrix.hub }}" --report .artifacts/bridge/report.json
+
+      - name: Save validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-hub-${{ matrix.hub }}
+          path: .artifacts/bridge/report.json

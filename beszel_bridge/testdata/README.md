@@ -9,3 +9,5 @@ Sanitized responses captured from disposable Hub/Agent containers using a `reado
 | 0.21.1 | `e2ed147a5aa6472e6462521632ccc7101668132c` |
 
 Each version includes `info.json`, `systems.json` and `system_stats.json`. Credentials and tokens are excluded. The 0.21.1 responses were captured from a real Hub and Agent through a readonly account. See [fixture format and coverage](../../docs/TESTING.md#bridge-fixtures) for sanitization, timestamps and derived test cases.
+
+`expanded/monitoring.json` is a separate synthetic capability fixture for multiple filesystems, SMART, hardware sensors, containers, services, storage pools, probes, packages and account-owned alerts. It is not a capture from any Hub version or physical hardware. The Go tests and isolated HTTPS proxy use it to verify mapping and Home Assistant discovery.

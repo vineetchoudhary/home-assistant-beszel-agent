@@ -5,6 +5,7 @@ Uses disposable containers and loopback-only published ports. Production HA
 and Supervisor installations are never contacted. Run with Docker available.
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -20,7 +21,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 HA_IMAGE = "ghcr.io/home-assistant/home-assistant:2026.10.1"
-PROXY = '''import http.server,json,pathlib,ssl,urllib.request,urllib.error
+PROXY = '''import datetime,http.server,json,pathlib,ssl,urllib.request,urllib.error,urllib.parse
 class Proxy(http.server.BaseHTTPRequestHandler):
     def handle_request(self):
         if not self.path.startswith('/beszel/'):
@@ -33,8 +34,41 @@ class Proxy(http.server.BaseHTTPRequestHandler):
         except urllib.error.HTTPError as error:
             upstream=error
         data=upstream.read()
+        status=upstream.status
         fault_path=pathlib.Path('/lab/proxy-fault.json')
         fault=json.loads(fault_path.read_text()) if fault_path.exists() else {}
+        if fault.get('expanded'):
+            fixture=json.loads(pathlib.Path('/repo/beszel_bridge/testdata/expanded/monitoring.json').read_text())
+            system_id=pathlib.Path('/lab/expanded-system-id').read_text().strip()
+            now=datetime.datetime.now(datetime.timezone.utc)
+            timestamp=lambda delta=0: (now-datetime.timedelta(hours=delta)).isoformat()
+            millis=int(now.timestamp()*1000)
+            parsed=urllib.parse.urlparse(self.path)
+            collection=parsed.path.split('/')[-2] if parsed.path.endswith('/records') else ''
+            if collection=='systems':
+                response=json.loads(data)
+                for system in response.get('items',[]):
+                    if system['id']==system_id:
+                        system['info'].update(fixture['system']['info'])
+                        system['status']='up'
+                data=json.dumps(response).encode()
+            elif collection=='system_stats':
+                sample=fixture['peak'] if "type='10m'" in urllib.parse.parse_qs(parsed.query).get('filter',[''])[0] else fixture['sample']
+                sample.update(system=system_id,created=timestamp())
+                if fault.get('expanded_bad_disk'): sample['stats'].setdefault('efs',{}).setdefault('data',{})['d']='changed-shape'
+                data=json.dumps({'page':1,'totalPages':1,'totalItems':1,'items':[sample]}).encode(); status=200
+            elif collection in fixture and isinstance(fixture[collection],list):
+                rows=fixture[collection]
+                for row in rows:
+                    row['system']=system_id
+                    if 'updated' in row: row['updated']=timestamp(10) if collection=='smart_devices' else millis if isinstance(row['updated'],int) else timestamp()
+                    if 'details_updated' in row: row['details_updated']=timestamp(10)
+                    if 'created' in row: row['created']=millis if isinstance(row['created'],int) else timestamp()
+                    if row.get('certInfo'): row['certInfo']['expires']=millis+30*86400000
+                data=json.dumps({'page':1,'totalPages':1 if rows else 0,'totalItems':len(rows),'items':rows}).encode(); status=200
+            elif parsed.path.endswith('/api/beszel/package-updates'):
+                row=fixture['package_updates']; row['checkedAt']=int(now.timestamp())-36000
+                data=json.dumps(row).encode(); status=200
         if fault:
             response=json.loads(data)
             if self.path.endswith('/api/beszel/info') and fault.get('future_version'):
@@ -54,7 +88,7 @@ class Proxy(http.server.BaseHTTPRequestHandler):
                     if fault.get('missing_memory'): sample['stats'].pop('mp',None)
                 if fault.get('invalid_sample'): response['items']=['changed-record-format']
             data=json.dumps(response).encode()
-        self.send_response(upstream.status)
+        self.send_response(status)
         self.send_header('Content-Type','application/json')
         self.send_header('Content-Length',str(len(data)))
         self.end_headers(); self.wfile.write(data)
@@ -141,12 +175,14 @@ class Lab:
             time.sleep(2)
         raise RuntimeError(title + " timed out (" + last_error + ")")
 
-    def snapshot(self, dashboard=False, customize=False):
+    def snapshot(self, dashboard=False, customize=False, enable_key=None):
         args = ["exec", self.ha, "python", "/repo/scripts/bridge-ha-verify.py"]
         if dashboard:
             args.append("--dashboard")
         if customize:
             args.append("--customize")
+        if enable_key:
+            args.extend(["--enable-key", enable_key])
         return json.loads(self.docker(*args))
 
     def entity(self, key, system_id=None):
@@ -174,6 +210,47 @@ class Lab:
     def readable(self, key):
         entity = self.entity(key)
         return entity and entity["state"] not in ("unavailable", "unknown")
+
+    def assert_identities_preserved(self, identities):
+        current = {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        assert all(current.get(key) == value for key, value in identities.items()), "Existing entity identity changed"
+
+    @staticmethod
+    def component_key(family, identity, metric):
+        return family + "_" + hashlib.sha256(identity.encode()).hexdigest()[:24] + "_" + metric
+
+    def expanded_metric_checks(self):
+        # Synthetic hardware responses pass through the authenticated HTTPS Hub
+        # proxy, then the actual Bridge, broker and HA discovery/registry stack.
+        fault = self.directory / "proxy-fault.json"
+        fault.write_text(json.dumps({"expanded": True}))
+        combined = "filesystems_combined_usage"
+        self.wait("weighted multi-disk usage reaches HA", lambda: self.entity(combined) and self.entity(combined)["state"] == "14")
+        smart = self.component_key("smart", "smt000000000001", "status")
+        seconds = self.component_key("smart", "smt000000000001", "power_on_seconds")
+        human = self.component_key("smart", "smt000000000001", "power_on_human")
+        self.wait("ten-hour-old SMART status remains available", lambda: self.entity(smart) and self.entity(smart)["state"] == "PASSED", timeout=120)
+        assert self.entity(seconds)["state"] in ("72000", "72000.0")
+        assert self.entity(human)["state"] == "20 hours"
+        assert self.entity(smart)["attributes"]["device"] == "/dev/sda"
+        assert self.entity(smart)["attributes"]["model"] == "CT1000BX500SSD1"
+        assert self.entity("uptime_human")["state"] == "20 hours"
+        self.checks.append("SMART metadata, raw seconds and readable durations reach HA")
+        core = self.component_key("cpu", "0", "usage")
+        registry = self.snapshot()["entities"]
+        entity = next(row for row in registry if row["unique_id"] == self.namespace + "_" + self.system_id + "_" + core)
+        assert entity["disabled_by"] == "integration", "Detailed entity was enabled by default"
+        self.snapshot(enable_key=core)
+        self.wait("user can enable a detailed CPU entity", lambda: self.entity(core) and self.entity(core)["state"] in ("10", "10.0"))
+        raw_metric = "attribute_" + hashlib.sha256(b"id:199").hexdigest()[:24]
+        raw_key = self.component_key("smart_attributes", "smt000000000001", raw_metric)
+        self.snapshot(enable_key=raw_key)
+        self.wait("raw SMART attribute preserves large integer metadata", lambda: self.entity(raw_key) and self.entity(raw_key)["attributes"].get("raw_value") == "9007199254740993")
+        fault.write_text(json.dumps({"expanded": True, "expanded_bad_disk": True}))
+        self.wait("invalid disk makes aggregate unavailable without hiding CPU", lambda: self.entity(combined)["state"] == "unavailable" and self.readable("cpu_usage"))
+        fault.write_text(json.dumps({"expanded": True}))
+        self.wait("valid disk recovers combined usage", lambda: self.entity(combined)["state"] == "14")
+        fault.unlink()
 
     def data_fault_checks(self):
         fault = self.directory / "proxy-fault.json"
@@ -339,7 +416,7 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         # Rename in the actual Hub; stable IDs and HA customizations must survive.
         self.hub_api("/api/collections/systems/records/" + self.system_id, {"name": "Renamed lab server"}, self.admin_token, "PATCH")
         self.wait("server rename updates device name", lambda: any(device["name"] == "Renamed lab server" for device in self.snapshot()["devices"]))
-        assert identities == {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        self.assert_identities_preserved(identities)
         self.checks.append("server rename preserves entity identities")
         assert self.entity("cpu_usage")["attributes"]["friendly_name"] == "My lab CPU"
         self.checks.append("HA entity ID and name customization survive rediscovery")
@@ -349,7 +426,8 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-config", str(self.directory / "openssl.cnf"), "-keyout", str(self.directory / "proxy.key"), "-out", str(self.directory / "proxy.crt")], check=True, capture_output=True)
         (self.directory / "proxy.py").write_text(PROXY)
         self.proxy = self.tag + "-proxy"
-        self.docker("run", "-d", "--name", self.proxy, "--network", self.tag, "--network-alias", "proxy", "--entrypoint", "python", "-v", f"{self.directory}:/lab:ro", HA_IMAGE, "/lab/proxy.py")
+        (self.directory / "expanded-system-id").write_text(self.system_id)
+        self.docker("run", "-d", "--name", self.proxy, "--network", self.tag, "--network-alias", "proxy", "--entrypoint", "python", "-v", f"{self.directory}:/lab:ro", "-v", f"{ROOT}:/repo:ro", HA_IMAGE, "/lab/proxy.py")
         self.containers.append(self.proxy)
         self.stop_bridge()
         self.options.update(hub_url="https://proxy:8443/beszel", hub_ca_file="/ssl/proxy.crt")
@@ -357,9 +435,10 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         self.start_bridge()
         self.wait("remote HTTPS base-path Hub with private CA", self.metric_ready)
         self.data_fault_checks()
+        self.expanded_metric_checks()
         # Require a new successful sync after restart, not a restored HA value.
         self.wait("remote Hub performs a successful sync", lambda: '"hub_connected":true' in self.docker("exec", self.bridge, "/usr/local/bin/bridge", "status").replace(" ", ""))
-        assert identities == {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        self.assert_identities_preserved(identities)
         assert self.entity("cpu_usage")["attributes"]["friendly_name"] == "My lab CPU"
         self.checks.append("Hub address change and Bridge restart preserve identity")
         self.docker("stop", self.proxy)
@@ -381,7 +460,7 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         self.docker("restart", self.ha)
         self.ha_url = "http://127.0.0.1:" + self.port(self.ha, "8123/tcp")
         self.wait("HA restart rediscovers existing entities", self.metric_ready, timeout=180)
-        assert identities == {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        self.assert_identities_preserved(identities)
         self.snapshot(dashboard=True)
         self.checks.append("both standard-card dashboard templates imported with actual entity IDs")
         if not self.args.keep:
@@ -390,6 +469,20 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
             self.save_options()
             self.start_bridge()
             self.wait("cleanup removes owned HA entities", lambda: len(self.snapshot()["entities"]) == 0)
+
+    def prepare_screenshots(self):
+        """Leave a verified, fixture-backed UI for real browser screenshots."""
+        self.hub_api("/api/collections/systems/records/" + self.system_id,
+                     {"name": "Home server"}, self.admin_token, "PATCH")
+        (self.directory / "proxy-fault.json").write_text(json.dumps({"expanded": True}))
+        self.stop_bridge()
+        self.start_bridge()
+        smart = self.component_key("smart", "smt000000000001", "status")
+        self.wait("screenshot SMART overview ready", lambda: self.entity(smart) and self.entity(smart)["state"] == "PASSED", timeout=120)
+        self.wait("screenshot disk aggregate ready", lambda: self.entity("filesystems_combined_usage") and self.entity("filesystems_combined_usage")["state"] == "14")
+        result = json.loads(self.docker("exec", self.ha, "python", "/repo/scripts/bridge-ha-verify.py", "--storage-dashboard", "--reset-customizations"))
+        assert any(entity["unique_id"].endswith("_uptime_human") for entity in result["entities"])
+        self.checks.append("storage dashboard imports with actual fixture-backed entity IDs")
 
     def close(self):
         if self.args.keep:
@@ -425,16 +518,23 @@ def main():
     parser.add_argument("--build", action="store_true", help="Build the Bridge and a Hub app pinned to --hub-version first")
     parser.add_argument("--report", type=Path)
     parser.add_argument("--capture-fixtures", type=Path, help="Save sanitized readonly API responses in a new version directory")
+    parser.add_argument("--prepare-screenshots", action="store_true", help="With --keep, prepare expanded example data and the storage dashboard for browser screenshots")
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?", args.hub_version):
         parser.error("Expected a Hub release version such as 0.21.1")
+    if args.prepare_screenshots and not args.keep:
+        parser.error("--prepare-screenshots requires --keep")
     lab = Lab(args)
     try:
         if args.build:
             lab.build()
         lab.prepare()
         lab.setup_ha()
+        if args.keep:
+            print("Browser test URL: " + lab.ha_url, flush=True)
         lab.exercise()
+        if args.prepare_screenshots:
+            lab.prepare_screenshots()
         report = {"app_version": lab.docker("run", "--rm", "--entrypoint", "/usr/local/bin/bridge", args.image, "version"),
                   "hub_version": args.hub_version, "ha_image": HA_IMAGE,
                   "tested_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -443,10 +543,25 @@ def main():
                   "hub_image_id": lab.docker("image", "inspect", args.hub_image, "--format", "{{.Id}}"),
                   "checks": lab.checks,
                   "supervisor_validated": False, "remote_machine": "isolated HTTPS proxy topology; physical remote deployment not tested"}
+        if args.keep:
+            report["retained_environment"] = {"ha_url": lab.ha_url, "directory": str(lab.directory), "network": lab.tag, "containers": lab.containers}
+            report["screenshot_data"] = "synthetic hardware fixtures" if args.prepare_screenshots else "live Agent readings"
         if args.report:
             args.report.parent.mkdir(parents=True, exist_ok=True)
             args.report.write_text(json.dumps(report, indent=2) + "\n")
         print(f"PASS {len(lab.checks)} real-stack checks", flush=True)
+    except Exception as error:
+        # Bridge logs deliberately exclude credentials and raw Hub values. Keep
+        # a small diagnostic report before disposable containers are removed.
+        if getattr(lab, "bridge", None):
+            log = subprocess.run(["docker", "logs", "--tail", "30", lab.bridge], text=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+            print("Bridge diagnostics:\n" + log, flush=True)
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(json.dumps({"hub_version": args.hub_version, "checks": lab.checks,
+                                               "failure_type": type(error).__name__}, indent=2) + "\n")
+        raise
     finally:
         lab.close()
 
