@@ -45,6 +45,17 @@ Run `python3 scripts/test-bridge-e2e.py --build --keep --prepare-screenshots --r
 
 Capture real browser screens for MQTT devices, enabling a detailed entity, SMART attributes and desktop/mobile dashboards. Keep passwords, tokens and production data out of images. Identify the hardware readings as synthetic examples. Close the browser tab and remove only the retained test containers, network and temporary directory after capture. Container screenshots do not validate Supervisor installation or physical SMART hardware.
 
+### HA Apps Preview
+
+The README's [HA Apps Preview](screenshots/beszel-apps.jpg) is rendered from the names, descriptions and icons in this repository using [ha-apps-preview.py](../scripts/ha-apps-preview.py). It follows Home Assistant's order: Agent, AMD, Intel, NVIDIA, S.M.A.R.T., Bridge and Hub. It shows four cards above three left-aligned cards, with no installation or host-availability badges.
+
+```bash
+python3 scripts/ha-apps-preview.py
+python3 -m http.server 18765 --bind 127.0.0.1 --directory .artifacts/bridge/screenshots/ha-apps-preview
+```
+
+Open `http://127.0.0.1:18765/` in a browser with an 1800 × 400 viewport. Capture the `main` element at 1800 × 376 pixels as `docs/screenshots/beszel-apps.jpg`, then close the tab and stop the server. Update the script's app order when adding another app.
+
 ### Bridge fixtures
 
 [Versioned fixtures](../beszel_bridge/testdata/README.md) contain `info.json` for `/api/beszel/info`, `systems.json` for inventory and `system_stats.json` for the latest `1m` sample.
