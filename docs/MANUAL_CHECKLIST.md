@@ -9,9 +9,11 @@ For contributors testing on a disposable or backed-up Home Assistant system. Rec
 - [ ] Test Supervisor and manual MQTT settings, TLS, custom discovery prefixes, rejected credentials, delayed startup and HA rediscovery.
 - [ ] Restart HA, Hub, broker and Bridge in different orders. Check recovery with fresh data, no duplicate devices and no Watchdog restart loop during upstream outages.
 - [ ] Verify device grouping, metric units, source timestamps, valid zero values, missing sensors, system status and system/metric filters. Test pagination and partial or malformed responses.
+- [ ] Check `enable_all_entities` defaults off. Enable it and verify Supervisor grants Core API access, existing entities are enabled in bulk, filters apply, and explicit user/device disables and entity customizations survive.
+- [ ] Check `history_retention_days` defaults to `0`. On a disposable Recorder database, verify a configured retention period removes only older selected Bridge states, preserves recent and unrelated history, and keeps its daily schedule across restarts. Confirm disabling cleanup stops requests.
 - [ ] Rename servers and HA entities, change the same Hub's URL and restore a backup. Existing identity and customization must survive.
 - [ ] Test Hub replacement, exclusions, inaccessible-system removal and cleanup with an offline old broker. Preserve unrelated MQTT topics.
-- [ ] Import both dashboard templates on desktop and mobile using actual entity IDs. Check missing metrics, unavailable readings, newly collected history and coexistence with other integrations.
+- [ ] Import all three dashboard templates on desktop and mobile using actual entity IDs. Check missing metrics, unavailable readings, newly collected history and coexistence with other integrations.
 - [ ] Test native amd64 and aarch64 installations. Record emulation separately. Verify GPU and S.M.A.R.T. behavior on physical hardware before making hardware claims.
 - [ ] Confirm existing Hub and Agent apps still install, start, connect and restore from backups.
 - [ ] Resolve failures and include results in the release change. See [Bridge release checks](RELEASE.md#bridge-release-checks) for the automated publishing checks.
