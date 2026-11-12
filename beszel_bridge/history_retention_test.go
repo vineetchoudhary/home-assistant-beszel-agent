@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +52,68 @@ func TestHistoryCleanupNeverPurgesWithEmptyScopeOrZeroDays(t *testing.T) {
 		t.Fatal("cleanup API error was ignored or leaked credentials")
 	}
 	<-requests
+}
+
+func TestHistoryRetentionRespectsSystemAndMetricFilters(t *testing.T) {
+	_, b, sample := expandedFixture(t)
+	b.systemMetrics(sample)
+	s, _ := telemetryService(t, b)
+	if err := s.publishTelemetry(b.system, b); err != nil {
+		t.Fatal(err)
+	}
+	core := metricKey("cpu", "0", "usage")
+	memory := metricKey("memory", "", "total")
+	otherSystem := "sys000000000099"
+	s.state.Topics[s.state.discoveryTopic("sensor", otherSystem, core)] = ownedEntity{System: otherSystem, Metric: core, Family: "cpu", Definition: &entityDefinition{Domain: "sensor"}}
+	entries := []map[string]any{}
+	for _, entry := range []struct{ system, metric string }{{b.system.ID, core}, {b.system.ID, memory}, {otherSystem, core}} {
+		entries = append(entries, map[string]any{"entity_id": "sensor." + entry.system + "_" + entry.metric, "unique_id": s.state.Namespace + "_" + entry.system + "_" + entry.metric, "platform": "mqtt"})
+	}
+	address, requests := registryServer(t, entries, "")
+	t.Setenv("BESZEL_BRIDGE_SUPERVISOR_URL", "http"+strings.TrimSuffix(strings.TrimPrefix(address, "ws"), "/core/websocket"))
+	t.Setenv("SUPERVISOR_TOKEN", "secret-test-token")
+	s.cfg.HistoryRetentionDays = 7
+	s.cfg.Metrics = []string{"cpu"}
+	s.cfg.ExcludeSystems = []string{otherSystem}
+	s.applyHistoryRetention(context.Background())
+	calls := <-requests
+	if len(calls) != 1 || calls[0]["type"] != "call_service" || s.historyPurgeWarning != "" {
+		t.Fatal("filtered history retention did not request one cleanup")
+	}
+	data := calls[0]["service_data"].(map[string]any)
+	ids := data["entity_id"].([]any)
+	if len(ids) != 1 || ids[0] != "sensor."+b.system.ID+"_"+core || data["keep_days"] != float64(7) {
+		t.Fatal("history retention included an excluded system or unselected metric")
+	}
+}
+
+func TestHistoryRetentionRetriesWhenScheduleCannotBeSaved(t *testing.T) {
+	_, b, sample := expandedFixture(t)
+	b.systemMetrics(sample)
+	s, _ := telemetryService(t, b)
+	if err := s.publishTelemetry(b.system, b); err != nil {
+		t.Fatal(err)
+	}
+	entries := []map[string]any{{"entity_id": "sensor.my_cpu", "unique_id": s.state.Namespace + "_" + b.system.ID + "_" + metricKey("cpu", "0", "usage"), "platform": "mqtt"}}
+	address, requests := registryServer(t, entries, "")
+	t.Setenv("BESZEL_BRIDGE_SUPERVISOR_URL", "http"+strings.TrimSuffix(strings.TrimPrefix(address, "ws"), "/core/websocket"))
+	t.Setenv("SUPERVISOR_TOKEN", "secret-test-token")
+	s.cfg.HistoryRetentionDays = 7
+	previous := b.now.Add(-48 * time.Hour)
+	s.state.HistoryPurgeAt, s.state.HistoryKeepDays = previous, 14
+	s.dir = filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(s.dir, []byte("block state writes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.applyHistoryRetention(context.Background())
+	if len(<-requests) != 1 || !s.state.HistoryPurgeAt.Equal(previous) || s.state.HistoryKeepDays != 14 || s.historyPurgeWarning == "" {
+		t.Fatal("failed persistence did not restore the previous cleanup schedule")
+	}
+	s.dir = t.TempDir()
+	s.applyHistoryRetention(context.Background())
+	if len(<-requests) != 1 || !s.state.HistoryPurgeAt.Equal(b.now) || s.state.HistoryKeepDays != 7 || s.historyPurgeWarning != "" {
+		t.Fatal("cleanup did not retry after schedule persistence recovered")
+	}
 }
 
 func TestHistoryRetentionSchedulePersistsAndRetries(t *testing.T) {
