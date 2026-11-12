@@ -276,6 +276,7 @@ class Lab:
         self.snapshot(enable_key=raw_key)
         self.wait("raw SMART attribute preserves large integer metadata", lambda: self.entity(raw_key) and self.entity(raw_key)["attributes"].get("raw_value") == "9007199254740993")
         self.enable_all_entity_checks()
+        self.history_retention_checks()
         fault.write_text(json.dumps({"expanded": True, "expanded_bad_disk": True}))
         self.wait("invalid disk makes aggregate unavailable without hiding CPU", lambda: self.entity(combined)["state"] == "unavailable" and self.readable("cpu_usage"))
         fault.write_text(json.dumps({"expanded": True}))
@@ -311,6 +312,43 @@ class Lab:
         self.save_options()
         self.start_bridge()
         self.wait("turning enable_all_entities off keeps existing entities enabled", all_enabled)
+
+    def history_retention_checks(self):
+        baseline = self.snapshot()
+        cpu = next(entity for entity in baseline["entities"] if entity["unique_id"] == self.namespace + "_" + self.system_id + "_cpu_usage")
+        identities = {entity["unique_id"]: (entity["entity_id"], entity["disabled_by"]) for entity in baseline["entities"]}
+
+        def history(seed=False):
+            command = ["exec", self.ha, "python", "/repo/scripts/bridge-ha-history.py", "--entity-id", cpu["entity_id"]]
+            if seed:
+                command.append("--seed")
+            return json.loads(self.docker(*command))
+
+        seeded = self.wait("disposable Recorder history fixture is committed", lambda: history(seed=True))
+        assert all(seeded[name] == 1 for name in ("owned_old", "owned_middle", "owned_recent", "unrelated_old"))
+        for days in (5, 2):
+            self.stop_bridge()
+            self.options["history_retention_days"] = days
+            self.save_options()
+            self.start_bridge()
+
+            def retained():
+                rows = history()
+                return rows["owned_old"] == 0 and rows["owned_middle"] == int(days == 5) and rows["owned_recent"] == 1 and rows["unrelated_old"] == 1
+
+            self.wait(f"{days}-day Bridge retention purges only older owned history", retained, timeout=120)
+        state = self.bridge_state()
+        assert state["history_keep_days"] == 2 and state["history_purge_at"], "Cleanup schedule was not persisted"
+        self.stop_bridge()
+        self.options["history_retention_days"] = 0
+        self.save_options()
+        self.start_bridge()
+        self.wait("Bridge resumes with history retention disabled", self.metric_ready)
+        after = self.snapshot()
+        current = {entity["unique_id"]: (entity["entity_id"], entity["disabled_by"]) for entity in after["entities"]}
+        assert all(current.get(key) == value for key, value in identities.items()), "History retention changed entity identity or enablement"
+        assert self.bridge_state()["history_purge_at"] == state["history_purge_at"], "Disabled retention requested another cleanup"
+        self.checks.append("history retention preserves recent and unrelated data, entity settings and the persisted cleanup schedule")
 
     def data_fault_checks(self):
         fault = self.directory / "proxy-fault.json"
@@ -453,8 +491,10 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
 
     def setup_ha(self):
         # A full Core instance exercises its built-in MQTT integration and UI.
-        (self.ha_dir / "configuration.yaml").write_text("default_config:\nhomeassistant:\n  name: Beszel Bridge Lab\n  time_zone: UTC\n  country: US\n  latitude: 0\n  longitude: 0\n  elevation: 0\n  unit_system: metric\n")
-        self.ha = self.start("ha", HA_IMAGE, "--network-alias", "ha", "-p", "127.0.0.1::8123", "-v", f"{self.ha_dir}:/config", "-v", f"{ROOT}:/repo:ro")
+        (self.ha_dir / "configuration.yaml").write_text("default_config:\nrecorder:\n  db_url: sqlite:////recorder/home-assistant_v2.db\nhomeassistant:\n  name: Beszel Bridge Lab\n  time_zone: UTC\n  country: US\n  latitude: 0\n  longitude: 0\n  elevation: 0\n  unit_system: metric\n")
+        # Keep SQLite/WAL on a native volume. Shared macOS mounts can give the
+        # Recorder and the history-fixture process different WAL file handles.
+        self.ha = self.start("ha", HA_IMAGE, "--network-alias", "ha", "-p", "127.0.0.1::8123", "-v", f"{self.ha_dir}:/config", "-v", "/recorder", "-v", f"{ROOT}:/repo:ro")
         self.ha_url = "http://127.0.0.1:" + self.port(self.ha, "8123/tcp")
         self.wait("Home Assistant onboarding available", lambda: self.request(self.ha_url, "/api/onboarding"), timeout=240)
         self.client_id = self.ha_url + "/"

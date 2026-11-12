@@ -56,6 +56,8 @@ For more servers, copy a card group and replace its Entity IDs. Always use IDs f
 
 Remove readings you have disabled or your hardware does not report. History starts when Home Assistant receives data. Older history stays in Beszel. If readings show **Unavailable**, check the [Bridge troubleshooting guide](../../../beszel_bridge/DOCS.md#troubleshooting).
 
+To limit detailed history for this Bridge, set `history_retention_days` to your desired number of days, from `1` to `365`, in the app's configuration. It defaults to `0`, which leaves Home Assistant's retention unchanged. Positive values permanently delete older recorded states during daily cleanup. Statistics keep Home Assistant's own rules. Read the [retention notes](../../../beszel_bridge/DOCS.md#history-retention) before enabling it.
+
 The detail template includes readable uptime and combined filesystem usage/free space. Combined values can double-count overlapping mounts or datasets. Configure `disk_aggregate_exclude` before relying on these totals.
 
 For disk health, use the storage template's **SMART disk health** card with one disk's entities. Repeat it for each physical disk. To see its model, device path, type, firmware and serial, select **Overall status**, then choose **⋮ > Details**. The source timestamp is the Hub's disk-data timestamp; Home Assistant's own last-updated time describes when it received the entity update.

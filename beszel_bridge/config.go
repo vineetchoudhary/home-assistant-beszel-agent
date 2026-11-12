@@ -33,6 +33,7 @@ type Config struct {
 	ExcludeSystems       []string        `json:"exclude_systems"`
 	Metrics              []string        `json:"metrics"`
 	EnableAllEntities    bool            `json:"enable_all_entities"`
+	HistoryRetentionDays int             `json:"history_retention_days"`
 	PollInterval         int             `json:"poll_interval"`
 	StaleAfter           int             `json:"stale_after"`
 	DetailStaleAfter     int             `json:"detail_stale_after"`
@@ -79,6 +80,9 @@ func (c *Config) validate() error {
 	}
 	if c.PollInterval < 15 || c.PollInterval > 300 {
 		return errors.New("poll_interval must be between 15 and 300 seconds")
+	}
+	if c.HistoryRetentionDays < 0 || c.HistoryRetentionDays > 365 {
+		return errors.New("history_retention_days must be 0 (Home Assistant default) or between 1 and 365 days")
 	}
 	minimumStale := max(180, 3*c.PollInterval)
 	if c.StaleAfter == 0 {

@@ -36,6 +36,7 @@ options:
   exclude_systems: []
   metrics: []
   enable_all_entities: false
+  history_retention_days: 0
   poll_interval: 30
   stale_after: 0
   detail_stale_after: 172800
@@ -62,6 +63,7 @@ schema:
   metrics:
     - list(cpu_usage|memory_usage|disk_usage|temperature|network_receive|network_transmit|uptime|last_sample|cpu|memory|swap|filesystems|disk_io|network|temperatures|fans|gpus|batteries|wifi|smart|smart_attributes|containers|services|storage_pools|network_monitors|package_updates|alerts|system_info|uptime_human)
   enable_all_entities: bool
+  history_retention_days: int(0,365)
   poll_interval: int(15,300)
   stale_after: int(0,86400)
   detail_stale_after: int(3600,31536000)

@@ -8,11 +8,15 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+var recordedEntityID = regexp.MustCompile(`^[a-z0-9_]+\.[a-z0-9_]+$`)
 
 // MQTT's enabled_by_default only affects new registry entries. Enable existing
 // integration-disabled entries through Core, leaving user/device choices intact.
@@ -20,6 +24,22 @@ func (s *service) enableEntities(ctx context.Context) {
 	if !s.cfg.EnableAllEntities {
 		return
 	}
+	address, token := supervisorCoreAPI()
+	count, err := enableRegisteredEntities(ctx, address, token, s.ownedEntityUniqueIDs())
+	if err != nil {
+		if s.entityEnableWarning != err.Error() {
+			slog.Warn("Cannot enable existing Home Assistant entities; retrying on the next poll", "reason", err)
+			s.entityEnableWarning = err.Error()
+		}
+		return
+	}
+	if count > 0 || s.entityEnableWarning != "" {
+		slog.Info("Home Assistant entity enabling completed", "enabled", count)
+	}
+	s.entityEnableWarning = ""
+}
+
+func (s *service) ownedEntityUniqueIDs() map[string]bool {
 	owned := map[string]bool{}
 	for topic, entity := range s.state.Topics {
 		if !s.state.owns(topic) {
@@ -39,6 +59,10 @@ func (s *service) enableEntities(ctx context.Context) {
 		}
 		owned[s.state.Namespace+"_"+system+"_"+entity.Metric] = true
 	}
+	return owned
+}
+
+func supervisorCoreAPI() (string, string) {
 	base := os.Getenv("BESZEL_BRIDGE_SUPERVISOR_URL")
 	if base == "" {
 		base = "http://supervisor"
@@ -46,23 +70,23 @@ func (s *service) enableEntities(ctx context.Context) {
 	address := strings.TrimRight(base, "/") + "/core/websocket"
 	address = strings.Replace(address, "http://", "ws://", 1)
 	address = strings.Replace(address, "https://", "wss://", 1)
-	count, err := enableRegisteredEntities(ctx, address, os.Getenv("SUPERVISOR_TOKEN"), owned)
-	if err != nil {
-		if s.entityEnableWarning != err.Error() {
-			slog.Warn("Cannot enable existing Home Assistant entities; retrying on the next poll", "reason", err)
-			s.entityEnableWarning = err.Error()
-		}
-		return
-	}
-	if count > 0 || s.entityEnableWarning != "" {
-		slog.Info("Home Assistant entity enabling completed", "enabled", count)
-	}
-	s.entityEnableWarning = ""
+	return address, os.Getenv("SUPERVISOR_TOKEN")
 }
 
 func enableRegisteredEntities(ctx context.Context, address, token string, owned map[string]bool) (int, error) {
+	return manageRegisteredEntities(ctx, address, token, owned, true, 0)
+}
+
+func purgeRegisteredEntityHistory(ctx context.Context, address, token string, owned map[string]bool, keepDays int) (int, error) {
+	if keepDays < 1 || keepDays > 365 {
+		return 0, errors.New("history retention cleanup requires between 1 and 365 days")
+	}
+	return manageRegisteredEntities(ctx, address, token, owned, false, keepDays)
+}
+
+func manageRegisteredEntities(ctx context.Context, address, token string, owned map[string]bool, enable bool, keepDays int) (int, error) {
 	if token == "" {
-		return 0, errors.New("enable_all_entities needs the app's Home Assistant API access through Supervisor")
+		return 0, errors.New("the app's Home Assistant API access through Supervisor is required")
 	}
 	u, err := url.Parse(address)
 	if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -151,14 +175,36 @@ func enableRegisteredEntities(ctx context.Context, address, token string, owned 
 		return 0, err
 	}
 	count := 0
+	targets := map[string]bool{}
 	for _, entity := range entries {
-		if entity.Platform != "mqtt" || !owned[entity.UniqueID] || entity.DisabledBy != "integration" {
+		if entity.Platform != "mqtt" || !owned[entity.UniqueID] {
+			continue
+		}
+		if keepDays > 0 && recordedEntityID.MatchString(entity.EntityID) {
+			targets[entity.EntityID] = true
+		}
+		if !enable || entity.DisabledBy != "integration" {
 			continue
 		}
 		if err := command("config/entity_registry/update", map[string]any{"entity_id": entity.EntityID, "disabled_by": nil}, nil); err != nil {
 			return count, err
 		}
 		count++
+	}
+	if keepDays > 0 && len(targets) > 0 {
+		ids := make([]string, 0, len(targets))
+		for id := range targets {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		// Never pass a domain, glob or empty entity list to Recorder cleanup.
+		if err := command("call_service", map[string]any{
+			"domain": "recorder", "service": "purge_entities",
+			"service_data": map[string]any{"entity_id": ids, "keep_days": keepDays},
+		}, nil); err != nil {
+			return 0, err
+		}
+		return len(ids), nil
 	}
 	return count, nil
 }

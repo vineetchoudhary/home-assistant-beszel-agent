@@ -44,6 +44,8 @@ type State struct {
 	MissingSince     map[string]time.Time   `json:"missing_since"`
 	ComponentMissing map[string]time.Time   `json:"component_missing,omitempty"`
 	Broker           string                 `json:"broker"`
+	HistoryPurgeAt   time.Time              `json:"history_purge_at,omitzero"`
+	HistoryKeepDays  int                    `json:"history_keep_days,omitempty"`
 }
 
 func loadState(dir string) (*State, error) {

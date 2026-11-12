@@ -104,6 +104,7 @@ In Supervisor mode, manual host, port, credentials and TLS settings are ignored.
 | `exclude_systems` | `[]` | System record IDs to omit. Exclusions take precedence. |
 | `metrics` | `[]` | Individual keys or families below. Empty selects all supported readings. Status, connectivity and Bridge diagnostics are always included. |
 | `enable_all_entities` | `false` | Enable all selected entities, including existing entities disabled by the integration. Explicit user disables are preserved. Save and restart the Bridge after changing this option. |
+| `history_retention_days` | `0` | Optional detailed-history cleanup for this Bridge's selected entities. `0` leaves Home Assistant's retention unchanged. Set `1` to `365` days to remove older recorded states daily. See the retention notes below. |
 | `poll_interval` | `30` | Seconds between polls, from `15` to `300`. |
 | `stale_after` | `0` | Maximum sample age in seconds. `0` uses `max(180, 3 × poll_interval)`. Explicit values must meet that minimum and be at most `86400`. |
 | `detail_stale_after` | `172800` | Maximum age of SMART, pool details and package inventory in seconds. Default is 48 hours. Range `3600` to `31536000`. |
@@ -211,6 +212,16 @@ Expanded entities stay under their server device. Hub record IDs identify record
 
 HA history starts when entities report. Older history stays in Beszel. Live container inspection, extended service runtime inspection, logs, administrative diagnostics and control actions are outside this monitoring interface.
 
+### History retention
+
+Set `history_retention_days` to your desired retention period in the Bridge's **Configuration**, then save and restart. Enter a whole number from `1` to `365` days. The default, `0`, turns Bridge-managed cleanup off and uses Home Assistant's normal retention.
+
+Positive values request `recorder.purge_entities` for the exact current entity IDs owned and selected by this Bridge, including renamed entities. Other integrations, the global Recorder configuration and the Beszel Hub database are unchanged.
+
+Cleanup is requested after the first successful sync, when the day limit changes, and then once every 24 hours while the Bridge runs. The last request is persisted so restarting does not repeat it. Home Assistant performs cleanup asynchronously, so this is a daily policy rather than an exact rolling cutoff.
+
+Enabling this option or lowering the limit permanently removes older recorded states and their attributes. Increasing the limit or turning cleanup off cannot restore deleted history. Short-term and long-term statistics keep Home Assistant's own retention rules. This option cannot keep history longer than Home Assistant's global `purge_keep_days`, or record entities excluded from Recorder. See [Recorder](https://www.home-assistant.io/integrations/recorder/) and [history data sources](https://www.home-assistant.io/integrations/history/#about-the-data-sources).
+
 Renaming a server or changing the same Hub's URL preserves devices and HA customizations. Excluded systems are removed at the next successful sync. Inaccessible systems and absent components are removed after five minutes of complete successful inventory checks. Incomplete or malformed inventories preserve discovery. An unavailable optional collection affects its readings while other valid data continues.
 
 ## Troubleshooting
@@ -222,6 +233,7 @@ Renaming a server or changing the same Hub's URL preserves devices and HA custom
 | MQTT service unavailable | Start the broker app or choose manual settings. |
 | Missing Home Assistant entities | Use the same broker and discovery prefix as Home Assistant, then check for a successful sync. |
 | Existing entities stay disabled with `enable_all_entities: true` | Check the Bridge log for a Home Assistant API warning and update/restart the app so Supervisor grants its Core API permission. Entities explicitly disabled by a user or device remain disabled. |
+| History retention is not applied | Check the Bridge log for a retention warning, ensure Recorder is enabled, and update/restart the app to grant its Core API permission. Cleanup runs daily and cannot extend Home Assistant's global history limit. |
 | Unavailable readings | Check the Agent, Hub connection and age of the source sample. |
 | Readings missing after a Hub update | Check the app log for changed or invalid fields. Other valid readings continue, and affected readings recover automatically when valid data returns. |
 

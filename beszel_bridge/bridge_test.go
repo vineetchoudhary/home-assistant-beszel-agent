@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,19 @@ func TestEnableAllEntitiesConfiguration(t *testing.T) {
 			config, err := loadConfig(filename)
 			if (err == nil) != test.valid || config.EnableAllEntities != test.want {
 				t.Fatalf("enable_all_entities = %v, error = %v", config.EnableAllEntities, err)
+			}
+		})
+	}
+}
+
+func TestHistoryRetentionConfiguration(t *testing.T) {
+	for _, days := range []int{0, 1, 2, 5, 365, -1, 366} {
+		t.Run(strconv.Itoa(days), func(t *testing.T) {
+			config := testConfig()
+			config.HistoryRetentionDays = days
+			err := config.validate()
+			if (err == nil) != (days >= 0 && days <= 365) {
+				t.Fatalf("history_retention_days %d: %v", days, err)
 			}
 		})
 	}

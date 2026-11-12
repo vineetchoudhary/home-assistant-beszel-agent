@@ -53,6 +53,8 @@ func registryServer(t *testing.T, entries []map[string]any, failure string) (str
 				reply["result"] = entries
 			case "config/entity_registry/update":
 				updates = append(updates, message)
+			case "call_service":
+				updates = append(updates, message)
 			default:
 				t.Errorf("unexpected API command: %v", message["type"])
 				return

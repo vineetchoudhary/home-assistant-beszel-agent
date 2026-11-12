@@ -30,4 +30,6 @@ Fast readings use source timestamps and normal freshness limits. SMART, pool det
 
 With `enable_all_entities: true`, MQTT discovery enables new entities and the Bridge uses the Supervisor Core WebSocket proxy to enable existing integration-disabled entries. Registry updates match exact owned MQTT unique IDs and respect metric/system filters. Explicit user and device disables are preserved. Core API failures are retried on the next poll without interrupting metric publication.
 
+Optional `history_retention_days` uses the same Core API path to request `recorder.purge_entities` for exact currently registered and selected Bridge entity IDs. The default `0` makes no cleanup requests. Successful requests persist the day limit and timestamp in the ownership manifest, limiting cleanup to once every 24 hours unless the configured limit changes. The Bridge never edits the Recorder database or its global configuration, and does not clear statistics.
+
 Hub backups stop the server for SQLite consistency. Bridge backups preserve identity and owned topics. See [Hub configuration](../beszel_hub/DOCS.md) and [Bridge setup](../beszel_bridge/DOCS.md).

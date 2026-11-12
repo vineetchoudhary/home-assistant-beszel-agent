@@ -55,6 +55,7 @@ type service struct {
 	warnings            map[string]string
 	collections         map[string]collectionResult
 	entityEnableWarning string
+	historyPurgeWarning string
 }
 
 func (s *service) diagnostics(info HubInfo) error {
@@ -207,6 +208,7 @@ func (s *service) sync(ctx context.Context) error {
 		}
 	}
 	s.enableEntities(ctx)
+	s.applyHistoryRetention(ctx)
 	return nil
 }
 
