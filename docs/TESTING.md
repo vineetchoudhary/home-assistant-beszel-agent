@@ -33,6 +33,8 @@ The first command runs Go tests, vet, formatting and amd64/arm64 compilation. Th
 
 Expanded tests cover disk aggregation/exclusions, SMART status/precision, large counters, hardware maps, containers/services, pool details, probe failures, package classification, account-owned alerts, discovery defaults and component-removal grace. The [expanded fixture](../beszel_bridge/testdata/expanded/monitoring.json) is synthetic and does not claim physical-hardware validation. Real-stack tests inject those responses through the authenticated HTTPS test proxy and verify the actual Bridge, MQTT integration, registry and states, including enabling disabled details.
 
+Unit tests exercise bulk enabling of 512 integration-disabled entities, exact MQTT ownership, metric/system filters, API failure handling and preservation of explicit user/device disables. The real-stack test forwards a simulated Supervisor Core WebSocket endpoint to Home Assistant and checks `enable_all_entities` against existing registry entries, including unchanged IDs, names and user disables. This does not validate permission provisioning by an installed Supervisor.
+
 `--build` builds the Bridge and the selected Hub version without changing repository pins. If `--hub-version` is omitted, the Hub's pin is used. Any release version can be tested. The [compatibility file](../beszel_bridge/compatibility.json) records coverage and does not restrict runtime versions.
 
 Add `--report .artifacts/bridge/report.json` to save results. `--keep` retains the environment and prints its URLs, container names, network and temporary directory. Remove those resources when finished. Otherwise cleanup is automatic.

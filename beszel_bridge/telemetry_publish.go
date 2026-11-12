@@ -14,7 +14,7 @@ func (s *State) telemetryDiscovery(c Config, system System, entity ownedEntity) 
 	payload := map[string]any{
 		"name": d.Name, "unique_id": id, "default_entity_id": d.Domain + "." + id,
 		"state_topic": root, "json_attributes_topic": root + "/attributes", "device": s.device(system),
-		"enabled_by_default": d.Enabled, "expire_after": d.Expiry,
+		"enabled_by_default": c.EnableAllEntities || d.Enabled, "expire_after": d.Expiry,
 		"availability":      []map[string]string{{"topic": s.root() + "/availability"}, {"topic": s.root() + "/hub/availability"}, {"topic": root + "/availability"}},
 		"availability_mode": "all", "payload_available": "online", "payload_not_available": "offline",
 		"origin": map[string]string{"name": "Beszel Bridge", "sw_version": version, "support_url": "https://github.com/vineetchoudhary/home-assistant-beszel-agent"},

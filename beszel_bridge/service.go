@@ -44,16 +44,17 @@ func (h *health) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 type service struct {
-	cfg         Config
-	dir         string
-	hub         *Hub
-	state       *State
-	pub         publisher
-	health      *health
-	now         func() time.Time
-	published   map[string]string
-	warnings    map[string]string
-	collections map[string]collectionResult
+	cfg                 Config
+	dir                 string
+	hub                 *Hub
+	state               *State
+	pub                 publisher
+	health              *health
+	now                 func() time.Time
+	published           map[string]string
+	warnings            map[string]string
+	collections         map[string]collectionResult
+	entityEnableWarning string
 }
 
 func (s *service) diagnostics(info HubInfo) error {
@@ -205,6 +206,7 @@ func (s *service) sync(ctx context.Context) error {
 			delete(s.warnings, id)
 		}
 	}
+	s.enableEntities(ctx)
 	return nil
 }
 

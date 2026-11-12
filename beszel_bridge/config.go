@@ -32,6 +32,7 @@ type Config struct {
 	IncludeSystems       []string        `json:"include_systems"`
 	ExcludeSystems       []string        `json:"exclude_systems"`
 	Metrics              []string        `json:"metrics"`
+	EnableAllEntities    bool            `json:"enable_all_entities"`
 	PollInterval         int             `json:"poll_interval"`
 	StaleAfter           int             `json:"stale_after"`
 	DetailStaleAfter     int             `json:"detail_stale_after"`

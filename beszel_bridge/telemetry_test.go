@@ -271,6 +271,53 @@ func TestExpandedDiscoveryFreshnessRenameAndCleanup(t *testing.T) {
 	}
 }
 
+func TestEnableAllEntitiesDiscovery(t *testing.T) {
+	data, b, sample := expandedFixture(t)
+	b.systemMetrics(sample)
+	b.smartMetrics(expandedRecords(data, "smart_devices"))
+	s, p := telemetryService(t, b)
+	if err := s.publishTelemetry(b.system, b); err != nil {
+		t.Fatal(err)
+	}
+	before := map[string]map[string]any{}
+	disabled := 0
+	for topic, entity := range s.state.Topics {
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(p.last(topic)), &payload); err != nil {
+			t.Fatal(err)
+		}
+		before[topic] = payload
+		if !entity.Definition.Enabled {
+			disabled++
+		}
+	}
+	if disabled == 0 {
+		t.Fatal("fixture must include detailed entities disabled by default")
+	}
+	for _, enabled := range []bool{true, false} {
+		s.cfg.EnableAllEntities = enabled
+		// Rediscover known entities even when the Hub has no current readings.
+		missing := newTelemetry(s.cfg, b.system, b.now)
+		if err := s.publishTelemetry(b.system, missing); err != nil {
+			t.Fatal(err)
+		}
+		for topic, original := range before {
+			var payload map[string]any
+			if err := json.Unmarshal([]byte(p.last(topic)), &payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload["enabled_by_default"] != (enabled || original["enabled_by_default"] == true) {
+				t.Fatalf("incorrect discovery default for %s with enable_all_entities=%v", topic, enabled)
+			}
+			for _, field := range []string{"unique_id", "default_entity_id", "name", "state_topic"} {
+				if payload[field] != original[field] {
+					t.Fatalf("%s changed for %s", field, topic)
+				}
+			}
+		}
+	}
+}
+
 func TestComponentRemovalRequiresConsecutiveCompleteInventories(t *testing.T) {
 	data, b, _ := expandedFixture(t)
 	b.smartMetrics(expandedRecords(data, "smart_devices"))

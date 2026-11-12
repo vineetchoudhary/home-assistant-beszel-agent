@@ -2,7 +2,9 @@
 
 Complete [Bridge setup](../../../beszel_bridge/DOCS.md) and confirm its MQTT devices first. Choose the [overview](server-overview.yaml), [detail](server-detail.yaml) or [storage and SMART](storage-health.yaml) template. All use standard Home Assistant cards.
 
-## Enable a detailed reading
+## Enable readings
+
+To enable all available readings at once, set `enable_all_entities: true` in the Bridge app's **Configuration**, save and restart it. This also enables existing entities disabled by the integration, preserving IDs, names, history and explicit user disables. Metric and system filters still apply. Turning the option off leaves existing settings intact.
 
 Overview readings are enabled automatically. For an optional detailed reading, open your server under **Settings > Devices & services > MQTT**. Scroll to the bottom of **Sensors** and choose **+N disabled entities**. Diagnostic readings have their own disabled-entity list.
 

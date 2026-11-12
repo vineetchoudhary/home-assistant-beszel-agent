@@ -28,4 +28,6 @@ Expanded adapters read current samples, native 10-minute peaks and independent i
 
 Fast readings use source timestamps and normal freshness limits. SMART, pool details and package inventory have a separate age limit, while timestamps and readable ages explain old data. Components need five minutes of complete successful absence before discovery removal. Detailed entities are discovered disabled by default and user choices survive rediscovery.
 
+With `enable_all_entities: true`, MQTT discovery enables new entities and the Bridge uses the Supervisor Core WebSocket proxy to enable existing integration-disabled entries. Registry updates match exact owned MQTT unique IDs and respect metric/system filters. Explicit user and device disables are preserved. Core API failures are retried on the next poll without interrupting metric publication.
+
 Hub backups stop the server for SQLite consistency. Bridge backups preserve identity and owned topics. See [Hub configuration](../beszel_hub/DOCS.md) and [Bridge setup](../beszel_bridge/DOCS.md).

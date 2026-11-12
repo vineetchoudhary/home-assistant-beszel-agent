@@ -19,6 +19,7 @@ async def main():
     parser.add_argument("--dashboard", action="store_true")
     parser.add_argument("--customize", action="store_true", help="Rename the test CPU entity through HA's registry")
     parser.add_argument("--enable-key", action="append", default=[], help="Enable a detailed test entity by its Bridge metric key")
+    parser.add_argument("--disable-key", action="append", default=[], help="Disable a test entity explicitly as a user")
     parser.add_argument("--storage-dashboard", action="store_true", help="Import the storage template with the expanded fixture's actual entity IDs")
     parser.add_argument("--reset-customizations", action="store_true", help="Restore the lab CPU entity's default name and ID for setup screenshots")
     args = parser.parse_args()
@@ -47,11 +48,11 @@ async def main():
                 await command("config/entity_registry/update", entity_id=cpu["entity_id"],
                               new_entity_id="sensor." + cpu_id, name=None)
                 registry = await command("config/entity_registry/list")
-            for key in args.enable_key:
+            for key, disabled_by in [(key, None) for key in args.enable_key] + [(key, "user") for key in args.disable_key]:
                 unique_id = namespace + "_" + settings["system_id"] + "_" + key
                 entity = next(item for item in registry if item["unique_id"] == unique_id)
-                await command("config/entity_registry/update", entity_id=entity["entity_id"], disabled_by=None)
-            if args.enable_key:
+                await command("config/entity_registry/update", entity_id=entity["entity_id"], disabled_by=disabled_by)
+            if args.enable_key or args.disable_key:
                 registry = await command("config/entity_registry/list")
             if args.customize:
                 cpu_id = namespace + "_" + settings["system_id"] + "_cpu_usage"

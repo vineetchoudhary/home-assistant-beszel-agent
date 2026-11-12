@@ -25,6 +25,47 @@ func testConfig() Config {
 	return Config{HubURL: "http://hub:8090/beszel", HubEmail: "reader@example.test", HubPassword: "secret-do-not-log", MQTTSource: "manual", MQTTHost: "broker", MQTTPort: 1883, PollInterval: 30, StaleAfter: 180, DiscoveryPrefix: "homeassistant", HAStatusTopic: "homeassistant/status"}
 }
 
+func TestEnableAllEntitiesConfiguration(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value any
+		want  bool
+		valid bool
+	}{
+		{"omitted", nil, false, true},
+		{"disabled", false, false, true},
+		{"enabled", true, true, true},
+		{"string rejected", "true", false, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			data, err := json.Marshal(testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var options map[string]any
+			if err = json.Unmarshal(data, &options); err != nil {
+				t.Fatal(err)
+			}
+			delete(options, "enable_all_entities")
+			if test.value != nil {
+				options["enable_all_entities"] = test.value
+			}
+			data, err = json.Marshal(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			filename := filepath.Join(t.TempDir(), "options.json")
+			if err = os.WriteFile(filename, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			config, err := loadConfig(filename)
+			if (err == nil) != test.valid || config.EnableAllEntities != test.want {
+				t.Fatalf("enable_all_entities = %v, error = %v", config.EnableAllEntities, err)
+			}
+		})
+	}
+}
+
 func TestCapturedVersionMetricsAndSourceFreshness(t *testing.T) {
 	var policy Compatibility
 	if err := json.Unmarshal(compatibilityJSON, &policy); err != nil || len(policy.TestedHubVersions) == 0 {

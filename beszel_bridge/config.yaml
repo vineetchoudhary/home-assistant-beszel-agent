@@ -15,6 +15,7 @@ arch:
 image: "ghcr.io/vineetchoudhary/home-assistant-beszel-bridge"
 services:
   - mqtt:want
+homeassistant_api: true
 map:
   - type: ssl
     read_only: true
@@ -34,6 +35,7 @@ options:
   include_systems: []
   exclude_systems: []
   metrics: []
+  enable_all_entities: false
   poll_interval: 30
   stale_after: 0
   detail_stale_after: 172800
@@ -59,6 +61,7 @@ schema:
     - match(^[a-z0-9]{15}$)
   metrics:
     - list(cpu_usage|memory_usage|disk_usage|temperature|network_receive|network_transmit|uptime|last_sample|cpu|memory|swap|filesystems|disk_io|network|temperatures|fans|gpus|batteries|wifi|smart|smart_attributes|containers|services|storage_pools|network_monitors|package_updates|alerts|system_info|uptime_human)
+  enable_all_entities: bool
   poll_interval: int(15,300)
   stale_after: int(0,86400)
   detail_stale_after: int(3600,31536000)

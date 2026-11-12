@@ -102,7 +102,8 @@ In Supervisor mode, manual host, port, credentials and TLS settings are ignored.
 | --- | --- | --- |
 | `include_systems` | `[]` | System record IDs to monitor. Empty selects all systems the account can access. |
 | `exclude_systems` | `[]` | System record IDs to omit. Exclusions take precedence. |
-| `metrics` | `[]` | Individual keys or families below. Empty selects all supported readings. Status, connectivity and Bridge diagnostics are always included. Detailed entities are discovered disabled by default. |
+| `metrics` | `[]` | Individual keys or families below. Empty selects all supported readings. Status, connectivity and Bridge diagnostics are always included. |
+| `enable_all_entities` | `false` | Enable all selected entities, including existing entities disabled by the integration. Explicit user disables are preserved. Save and restart the Bridge after changing this option. |
 | `poll_interval` | `30` | Seconds between polls, from `15` to `300`. |
 | `stale_after` | `0` | Maximum sample age in seconds. `0` uses `max(180, 3 × poll_interval)`. Explicit values must meet that minimum and be at most `86400`. |
 | `detail_stale_after` | `172800` | Maximum age of SMART, pool details and package inventory in seconds. Default is 48 hours. Range `3600` to `31536000`. |
@@ -164,7 +165,17 @@ These original keys and identities remain supported. Selecting a family includes
 
 The Bridge device also exposes monitored/degraded system counts and an incomplete-inventory indicator. Sample age is an optional diagnostic entity on each server. These diagnostics are always selected.
 
-Existing entities, readable uptime, extra filesystem usage, combined storage overview and SMART overview entities are enabled by default. Other new entities are discovered disabled. Open the server under **Settings > Devices & services > MQTT** and enable a detailed entity in its settings. Home Assistant remembers that choice across rediscovery and restarts. See the [illustrated entity and dashboard setup](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/dashboards/beszel/SETUP.md) for the steps.
+Existing entities, readable uptime, extra filesystem usage, combined storage overview and SMART overview entities are enabled by default. Other new entities are discovered disabled unless `enable_all_entities` is enabled.
+
+To enable all available readings at once, set this option in the Bridge's **Configuration**, save and restart:
+
+```yaml
+enable_all_entities: true
+```
+
+The Bridge enables new entities through MQTT discovery and existing integration-disabled entities through Home Assistant's API using its Supervisor token. No separate Home Assistant token is needed. Only this Bridge's selected entities are changed. Metric and system filters still apply, and entities disabled explicitly by a user or a disabled device remain disabled. Existing IDs, names and history are preserved. Home Assistant may take a short time to load the enabled entities. Turning the option off restores defaults for new discoveries and leaves existing entity settings intact.
+
+For individual readings, open the server under **Settings > Devices & services > MQTT** and enable the entity in its settings. See the [illustrated entity and dashboard setup](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/dashboards/beszel/SETUP.md) for the steps.
 
 Expanded readings have a `source_timestamp` attribute. Sizes use bytes, rates use `B/s`, latencies use milliseconds and temperatures use °C. Native bytes take precedence over legacy GiB/MiB fields. Home Assistant handles cumulative counter resets. Vendor SMART attributes retain their source encoding without guessed units or statistics classes.
 
@@ -210,6 +221,7 @@ Renaming a server or changing the same Hub's URL preserves devices and HA custom
 | Login fails or no systems appear | Use a normal account with a password and shared systems. Check filters. |
 | MQTT service unavailable | Start the broker app or choose manual settings. |
 | Missing Home Assistant entities | Use the same broker and discovery prefix as Home Assistant, then check for a successful sync. |
+| Existing entities stay disabled with `enable_all_entities: true` | Check the Bridge log for a Home Assistant API warning and update/restart the app so Supervisor grants its Core API permission. Entities explicitly disabled by a user or device remain disabled. |
 | Unavailable readings | Check the Agent, Hub connection and age of the source sample. |
 | Readings missing after a Hub update | Check the app log for changed or invalid fields. Other valid readings continue, and affected readings recover automatically when valid data returns. |
 

@@ -21,6 +21,33 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 HA_IMAGE = "ghcr.io/home-assistant/home-assistant:2026.10.1"
+
+HA_API_PROXY = r'''
+import asyncio
+from aiohttp import ClientSession, WSMsgType, web
+
+async def websocket_proxy(request):
+    client = web.WebSocketResponse(max_msg_size=32 << 20)
+    await client.prepare(request)
+    async with ClientSession() as session:
+        async with session.ws_connect("http://ha:8123/api/websocket", max_msg_size=32 << 20) as upstream:
+            async def forward(source, target):
+                async for message in source:
+                    if message.type == WSMsgType.TEXT:
+                        await target.send_str(message.data)
+                    elif message.type == WSMsgType.BINARY:
+                        await target.send_bytes(message.data)
+            tasks = [asyncio.create_task(forward(client, upstream)), asyncio.create_task(forward(upstream, client))]
+            _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+    return client
+
+app = web.Application()
+app.router.add_get("/core/websocket", websocket_proxy)
+web.run_app(app, host="0.0.0.0", port=80, print=None)
+'''
 PROXY = '''import datetime,http.server,json,pathlib,ssl,urllib.request,urllib.error,urllib.parse
 class Proxy(http.server.BaseHTTPRequestHandler):
     def handle_request(self):
@@ -175,7 +202,7 @@ class Lab:
             time.sleep(2)
         raise RuntimeError(title + " timed out (" + last_error + ")")
 
-    def snapshot(self, dashboard=False, customize=False, enable_key=None):
+    def snapshot(self, dashboard=False, customize=False, enable_key=None, disable_key=None):
         args = ["exec", self.ha, "python", "/repo/scripts/bridge-ha-verify.py"]
         if dashboard:
             args.append("--dashboard")
@@ -183,6 +210,8 @@ class Lab:
             args.append("--customize")
         if enable_key:
             args.extend(["--enable-key", enable_key])
+        if disable_key:
+            args.extend(["--disable-key", disable_key])
         return json.loads(self.docker(*args))
 
     def entity(self, key, system_id=None):
@@ -246,11 +275,42 @@ class Lab:
         raw_key = self.component_key("smart_attributes", "smt000000000001", raw_metric)
         self.snapshot(enable_key=raw_key)
         self.wait("raw SMART attribute preserves large integer metadata", lambda: self.entity(raw_key) and self.entity(raw_key)["attributes"].get("raw_value") == "9007199254740993")
+        self.enable_all_entity_checks()
         fault.write_text(json.dumps({"expanded": True, "expanded_bad_disk": True}))
         self.wait("invalid disk makes aggregate unavailable without hiding CPU", lambda: self.entity(combined)["state"] == "unavailable" and self.readable("cpu_usage"))
         fault.write_text(json.dumps({"expanded": True}))
         self.wait("valid disk recovers combined usage", lambda: self.entity(combined)["state"] == "14")
         fault.unlink()
+
+    def enable_all_entity_checks(self):
+        baseline = self.snapshot()
+        # Pick an actual detailed GPU entity rather than assuming its source key.
+        gpu = next(entity for entity in baseline["entities"] if "_gpus_" in entity["unique_id"] and entity["disabled_by"] == "integration")
+        user_disabled = gpu["unique_id"].removeprefix(self.namespace + "_" + self.system_id + "_")
+        baseline = self.snapshot(disable_key=user_disabled)
+        identities = {entity["unique_id"]: entity["entity_id"] for entity in baseline["entities"]}
+        disabled = {entity["unique_id"] for entity in baseline["entities"] if entity["disabled_by"] == "integration"}
+        assert disabled, "Expanded fixture needs integration-disabled entities"
+        self.stop_bridge()
+        self.options["enable_all_entities"] = True
+        self.save_options()
+        self.start_bridge()
+
+        def all_enabled():
+            entities = {entity["unique_id"]: entity for entity in self.snapshot()["entities"]}
+            return all(key in entities and entities[key]["disabled_by"] is None for key in disabled)
+
+        self.wait("enable_all_entities enables existing disabled entities in real HA", all_enabled, timeout=120)
+        current = self.snapshot()
+        assert next(entity for entity in current["entities"] if entity["unique_id"] == gpu["unique_id"])["disabled_by"] == "user", "Explicit user disable was overwritten"
+        self.assert_identities_preserved(identities)
+        assert self.entity("cpu_usage")["attributes"]["friendly_name"] == "My lab CPU"
+        self.checks.append("bulk enabling preserves existing entity IDs, user names and explicit disables")
+        self.stop_bridge()
+        self.options["enable_all_entities"] = False
+        self.save_options()
+        self.start_bridge()
+        self.wait("turning enable_all_entities off keeps existing entities enabled", all_enabled)
 
     def data_fault_checks(self):
         fault = self.directory / "proxy-fault.json"
@@ -290,7 +350,13 @@ class Lab:
         self.checks.append("malformed values are omitted from Bridge logs")
 
     def start_bridge(self):
-        self.bridge = self.start("bridge", self.args.image, "-v", f"{self.bridge_dir}:/data", "-v", f"{self.directory}:/ssl:ro")
+        environment = []
+        if getattr(self, "ha_token", None):
+            env_file = self.directory / "ha-api.env"
+            env_file.write_text("SUPERVISOR_TOKEN=" + self.ha_token + "\n")
+            env_file.chmod(0o600)
+            environment = ["--env-file", str(env_file)]
+        self.bridge = self.start("bridge", self.args.image, *environment, "-v", f"{self.bridge_dir}:/data", "-v", f"{self.directory}:/ssl:ro")
 
     def stop_bridge(self):
         self.docker("rm", "-fv", self.bridge)
@@ -404,6 +470,10 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         result = self.request(self.ha_url, "/api/config/config_entries/flow/" + flow["flow_id"],
                               {"broker": "broker", "port": 1883, "protocol": "5", "other_settings": {"set_ca_cert": "off", "set_client_cert": False, "transport": "tcp"}}, self.ha_token)
         assert result["type"] == "create_entry", "MQTT config flow did not complete: " + str(result.get("errors"))
+        (self.directory / "ha-api.py").write_text(HA_API_PROXY)
+        self.ha_api = self.tag + "-ha-api"
+        self.containers.append(self.ha_api)
+        self.docker("run", "-d", "--name", self.ha_api, "--network", self.tag, "--network-alias", "supervisor", "--entrypoint", "python", "-v", f"{self.directory}:/lab:ro", HA_IMAGE, "/lab/ha-api.py")
         self.wait("HA creates real MQTT metric entities", self.metric_ready)
 
     def exercise(self):
