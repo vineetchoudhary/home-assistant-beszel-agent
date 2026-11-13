@@ -103,6 +103,7 @@ In Supervisor mode, manual host, port, credentials and TLS settings are ignored.
 | `include_systems` | `[]` | System record IDs to monitor. Empty selects all systems the account can access. |
 | `exclude_systems` | `[]` | System record IDs to omit. Exclusions take precedence. |
 | `metrics` | `[]` | Individual keys or families below. Empty selects all supported readings. Status, connectivity and Bridge diagnostics are always included. |
+| `group_entities` | `false` | Optional single status entity per SMART disk, container and systemd service, with detailed properties as attributes. Save and restart after changing this option. See grouped entities below. |
 | `enable_all_entities` | `false` | Enable all selected entities, including existing entities disabled by the integration. Explicit user disables are preserved. Save and restart the Bridge after changing this option. |
 | `history_retention_days` | `0` | Optional detailed-history cleanup for this Bridge's selected entities. `0` leaves Home Assistant's retention unchanged. Set `1` to `365` days to remove older recorded states daily. See the retention notes below. |
 | `poll_interval` | `30` | Seconds between polls, from `15` to `300`. |
@@ -179,6 +180,42 @@ The Bridge enables new entities through MQTT discovery and existing integration-
 For individual readings, open the server under **Settings > Devices & services > MQTT** and enable the entity in its settings. See the [illustrated entity and dashboard setup](https://github.com/vineetchoudhary/home-assistant-beszel-agent/blob/main/docs/dashboards/beszel/SETUP.md) for the steps.
 
 Expanded readings have a `source_timestamp` attribute. Sizes use bytes, rates use `B/s`, latencies use milliseconds and temperatures use °C. Native bytes take precedence over legacy GiB/MiB fields. Home Assistant handles cumulative counter resets. Vendor SMART attributes retain their source encoding without guessed units or statistics classes.
+
+### Optional grouped entities
+
+The default layout keeps individual readings. To reduce the number of entities, enable **group_entities** in the Bridge app's **Configuration**, save and restart:
+
+```yaml
+group_entities: true
+```
+
+Grouping keeps one existing status entity per SMART disk and container, and one existing state entity per systemd service. The status/state entity keeps its ID and name. Its other readings become attributes, and replaced detail discovery is removed after a complete, fresh summary has been published. Other metric families and host-wide container/service counts keep their current entities. Here, services means the Hub's systemd inventory; arbitrary OS processes are not collected.
+
+| Summary | State | Attributes when reported |
+| --- | --- | --- |
+| SMART disk status | Disk health such as `PASSED` or `UNKNOWN`. | Device, model, type, firmware, serial, `capacity_bytes`, `temperature_celsius`, `power_cycles`, `power_on_hours`, `power_on_seconds`, `power_on_human`, `power_on_source_precision_seconds`, `last_updated` and `smart_attributes`. |
+| Container status | The Hub's reported status. | Name, container ID, image, ports, `health`, `cpu_usage_percent`, `memory_bytes`, `bandwidth_bytes_per_second`, `receive_bytes_per_second`, `transmit_bytes_per_second`, `update_available` and `last_updated`. |
+| Service state | State such as `active` or `failed`. | Service name, `substate`, `cpu_usage_percent`, `cpu_peak_percent`, `memory_bytes`, `memory_peak_bytes` and `last_updated`. |
+
+`smart_attributes` is a list of the drive's reported properties. Each item includes its name, ID when available, normalized/worst values, threshold, raw value/string and failure flag when reported. Unrecognized vendor fields are preserved. Large raw integers use an exact `raw_value` string. Selecting only `smart_attributes` also selects the disk status needed to carry them. Selecting only `smart` omits the vendor list. Unsupported values stay absent, and stale or ambiguous container receive/transmit samples are omitted. `attribute_timestamps` identifies values with a source timestamp different from the summary's source. Use `last_updated` to calculate age; changing readable ages are not included in grouped attributes.
+
+Grouping and enabling are separate settings. The existing defaults still apply: SMART status is enabled by default, while container/service summaries are optional. Use `enable_all_entities` to enable selected integration-disabled summaries in bulk. Turning `group_entities` off restores individual discovery after the next successful fetch. Update dashboards and automations referencing replaced detail entities to use the summary's attributes. Existing detail history is not moved into the summary or deleted by grouping; Home Assistant's configured retention continues to apply.
+
+Attributes can be shown in standard dashboard entity cards and used in templates or automations. They do not get independent numeric history charts or long-term statistics. For a reading that needs its own graph, keep individual mode or create a [template sensor](https://www.home-assistant.io/integrations/template/). For example, replace the ID below with your container status entity:
+
+```yaml
+template:
+  - sensor:
+      - name: "Container CPU"
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: "{{ state_attr('sensor.beszel_server_container_status', 'cpu_usage_percent') }}"
+        availability: >-
+          {{ has_value('sensor.beszel_server_container_status')
+             and state_attr('sensor.beszel_server_container_status', 'cpu_usage_percent') is number }}
+```
+
+Fewer entities do not guarantee a smaller Recorder database. Attribute changes also produce state writes, so large or frequently changing attribute lists still have a history cost. See Home Assistant's [MQTT sensor attribute guidance](https://www.home-assistant.io/integrations/sensor.mqtt/#json-attributes-template-configuration).
 
 ### Multiple disks and SMART
 

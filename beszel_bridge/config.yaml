@@ -35,6 +35,7 @@ options:
   include_systems: []
   exclude_systems: []
   metrics: []
+  group_entities: false
   enable_all_entities: false
   history_retention_days: 0
   poll_interval: 30
@@ -62,6 +63,7 @@ schema:
     - match(^[a-z0-9]{15}$)
   metrics:
     - list(cpu_usage|memory_usage|disk_usage|temperature|network_receive|network_transmit|uptime|last_sample|cpu|memory|swap|filesystems|disk_io|network|temperatures|fans|gpus|batteries|wifi|smart|smart_attributes|containers|services|storage_pools|network_monitors|package_updates|alerts|system_info|uptime_human)
+  group_entities: bool
   enable_all_entities: bool
   history_retention_days: int(0,365)
   poll_interval: int(15,300)

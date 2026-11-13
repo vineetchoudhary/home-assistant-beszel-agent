@@ -4,6 +4,8 @@ Complete [Bridge setup](../../../beszel_bridge/DOCS.md) and confirm its MQTT dev
 
 ## Enable readings
 
+The templates below use the default individual layout. For fewer entities, optionally set `group_entities: true` in the Bridge configuration and restart. SMART disks, containers and systemd services then keep one status/state entity each, with their properties in attributes. Adapt cards referencing their detail entities, or keep `group_entities: false` for individual charts. See [grouped entities and template sensors](../../../beszel_bridge/DOCS.md#optional-grouped-entities).
+
 To enable all available readings at once, set `enable_all_entities: true` in the Bridge app's **Configuration**, save and restart it. This also enables existing entities disabled by the integration, preserving IDs, names, history and explicit user disables. Metric and system filters still apply. Turning the option off leaves existing settings intact.
 
 Overview readings are enabled automatically. For an optional detailed reading, open your server under **Settings > Devices & services > MQTT**. Scroll to the bottom of **Sensors** and choose **+N disabled entities**. Diagnostic readings have their own disabled-entity list.

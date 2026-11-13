@@ -32,6 +32,7 @@ type Config struct {
 	IncludeSystems       []string        `json:"include_systems"`
 	ExcludeSystems       []string        `json:"exclude_systems"`
 	Metrics              []string        `json:"metrics"`
+	GroupEntities        bool            `json:"group_entities"`
 	EnableAllEntities    bool            `json:"enable_all_entities"`
 	HistoryRetentionDays int             `json:"history_retention_days"`
 	PollInterval         int             `json:"poll_interval"`
@@ -160,6 +161,10 @@ func (c Config) enabled(key string) bool {
 	}
 	for _, metric := range c.Metrics {
 		if metric == key || metric == legacyFamilies[key] {
+			return true
+		}
+		// Grouped raw SMART attributes live on the disk's status entity.
+		if c.GroupEntities && key == "smart" && metric == "smart_attributes" {
 			return true
 		}
 	}

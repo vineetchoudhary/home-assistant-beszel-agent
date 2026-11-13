@@ -39,6 +39,7 @@ func (s *State) telemetryDiscovery(c Config, system System, entity ownedEntity) 
 }
 
 func (s *service) publishTelemetry(system System, b *telemetry) error {
+	b.groupReadings()
 	if s.state.ComponentMissing == nil {
 		s.state.ComponentMissing = map[string]time.Time{}
 	}
@@ -66,9 +67,13 @@ func (s *service) publishTelemetry(system System, b *telemetry) error {
 		}
 	}
 	sort.Strings(topics)
+	groupedReady := map[string]bool{}
 	for _, topic := range topics {
 		entity := s.state.Topics[topic]
 		if !s.cfg.enabled(entity.Family) && entity.Family != "diagnostics" {
+			continue
+		}
+		if _, primary, grouped := groupedPrimary(entity.Family, entity.Component); s.cfg.GroupEntities && grouped && entity.Metric != primary {
 			continue
 		}
 		if err := s.configMessage(topic, s.state.telemetryDiscovery(s.cfg, system, entity), entity); err != nil {
@@ -94,6 +99,22 @@ func (s *service) publishTelemetry(system System, b *telemetry) error {
 		}
 		if err := s.pub.publish(root+"/availability", available, true); err != nil {
 			return err
+		}
+		groupedReady[entity.Metric] = available == "online"
+	}
+	if s.cfg.GroupEntities {
+		for _, topic := range topics {
+			entity := s.state.Topics[topic]
+			_, primary, grouped := groupedPrimary(entity.Family, entity.Component)
+			if !grouped || entity.Metric == primary || !groupedReady[primary] || !b.complete[entity.Family] {
+				continue
+			}
+			// Remove only this Bridge's replaced discovery after its summary was
+			// successfully published from a complete, fresh inventory.
+			if err := s.state.removeEntity(s.pub, s.dir, topic); err != nil {
+				return err
+			}
+			delete(s.published, topic)
 		}
 	}
 	return s.reconcileComponents(system.ID, b)

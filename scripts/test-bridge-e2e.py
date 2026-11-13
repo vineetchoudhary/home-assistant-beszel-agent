@@ -277,11 +277,72 @@ class Lab:
         self.wait("raw SMART attribute preserves large integer metadata", lambda: self.entity(raw_key) and self.entity(raw_key)["attributes"].get("raw_value") == "9007199254740993")
         self.enable_all_entity_checks()
         self.history_retention_checks()
+        self.grouped_entity_checks()
         fault.write_text(json.dumps({"expanded": True, "expanded_bad_disk": True}))
         self.wait("invalid disk makes aggregate unavailable without hiding CPU", lambda: self.entity(combined)["state"] == "unavailable" and self.readable("cpu_usage"))
         fault.write_text(json.dumps({"expanded": True}))
         self.wait("valid disk recovers combined usage", lambda: self.entity(combined)["state"] == "14")
         fault.unlink()
+
+    def grouped_entity_checks(self):
+        baseline = self.snapshot()
+        identities = {entity["unique_id"]: entity["entity_id"] for entity in baseline["entities"]}
+        smart = self.component_key("smart", "smt000000000001", "status")
+        container = self.component_key("containers", "abcdef123456", "status")
+        service = self.component_key("services", "svc000000000001", "state")
+        details = set()
+        for entity in self.bridge_state()["topics"].values():
+            family = entity.get("family")
+            component = entity.get("component", "")
+            if family not in ("smart", "smart_attributes", "containers", "services") or ":" not in component:
+                continue
+            identity = component.split(":", 1)[1]
+            if not identity:
+                continue
+            primary = self.component_key("smart" if family == "smart_attributes" else family, identity,
+                                         "state" if family == "services" else "status")
+            if entity["metric"] != primary:
+                details.add(self.namespace + "_" + self.system_id + "_" + entity["metric"])
+        assert details, "Expanded fixture needs individual detail entities before grouping"
+        self.stop_bridge()
+        self.options["group_entities"] = True
+        self.save_options()
+        self.start_bridge()
+
+        def grouped():
+            snapshot = self.snapshot()
+            entities = {entity["unique_id"]: entity["entity_id"] for entity in snapshot["entities"]}
+            if details.intersection(entities):
+                return False
+            def state(key):
+                entity_id = entities.get(self.namespace + "_" + self.system_id + "_" + key)
+                return snapshot["states"].get(entity_id, {})
+            disk, app, daemon = state(smart), state(container), state(service)
+            attrs = disk.get("attributes", {})
+            return (disk.get("state") == "PASSED" and attrs.get("power_on_seconds") == 72000
+                    and attrs.get("temperature_celsius") == 32
+                    and any(row.get("raw_value") == "9007199254740993" for row in attrs.get("smart_attributes", []))
+                    and app.get("attributes", {}).get("memory_bytes") == 134217728
+                    and app.get("attributes", {}).get("receive_bytes_per_second") == 200
+                    and daemon.get("state") == "failed"
+                    and daemon.get("attributes", {}).get("cpu_usage_percent") == 0)
+
+        self.wait("optional grouping replaces SMART, container and service details with attributes", grouped, timeout=120)
+        preserved = {key: value for key, value in identities.items() if key not in details}
+        self.assert_identities_preserved(preserved)
+        assert self.entity("cpu_usage")["attributes"]["friendly_name"] == "My lab CPU"
+        self.checks.append("grouped summaries preserve IDs, unrelated entities and exact SMART integers")
+        self.stop_bridge()
+        self.options["group_entities"] = False
+        self.save_options()
+        self.start_bridge()
+
+        def individual():
+            registered = {entity["unique_id"] for entity in self.snapshot()["entities"]}
+            return details.issubset(registered) and self.readable(self.component_key("smart", "smt000000000001", "power_on_seconds"))
+
+        self.wait("disabling grouping restores individual detail discovery", individual, timeout=120)
+        self.assert_identities_preserved(preserved)
 
     def enable_all_entity_checks(self):
         baseline = self.snapshot()

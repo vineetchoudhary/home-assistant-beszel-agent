@@ -28,12 +28,17 @@ func (b *telemetry) smartMetrics(result collectionResult) {
 			attrs["capacity_bytes"] = capacity
 			b.add("smart", id, "capacity", prefix+" capacity", strconv.FormatUint(capacity, 10), "B", "data_size", "measurement", source, ttl, true, false, nil)
 		}
-		b.text("smart", id, "status", prefix+" status", disk.text("state"), source, ttl, true, false, attrs)
+		status := disk.text("state")
+		if status == "" && b.cfg.GroupEntities {
+			status = "UNKNOWN"
+		}
+		b.text("smart", id, "status", prefix+" status", status, source, ttl, true, false, attrs)
 		b.timestamp("smart", id, "last_updated", prefix+" last updated", source, true)
 		b.age("smart", id, prefix, source, true)
 		attributes := array(disk["attributes"])
 		hoursSupported, cyclesSupported, tempSupported := false, false, false
 		seen := map[string]bool{}
+		groupedAttributes := []map[string]any{}
 		for _, raw := range attributes {
 			attribute := obj(raw)
 			attributeName := attribute.text("n")
@@ -54,6 +59,9 @@ func (b *telemetry) smartMetrics(result collectionResult) {
 				continue
 			}
 			seen[identity] = true
+			if b.cfg.GroupEntities && b.cfg.enabled("smart_attributes") {
+				groupedAttributes = append(groupedAttributes, smartAttributeDetails(attribute))
+			}
 			attributeAttrs := metadata(attribute, "id", "n", "v", "w", "t", "rs", "wf")
 			attributeAttrs["device"] = name
 			attributeAttrs["record_id"] = id
@@ -66,6 +74,9 @@ func (b *telemetry) smartMetrics(result collectionResult) {
 		}
 		if raw, exists := disk["attributes"]; exists && string(raw) != "null" && attributes == nil {
 			b.scope("smart_attributes", false)
+		}
+		if b.cfg.GroupEntities && b.cfg.enabled("smart_attributes") {
+			attrs["smart_attributes"] = groupedAttributes
 		}
 		if hours, ok := disk.uint("hours"); ok && (hours > 0 || hoursSupported) && hours <= math.MaxUint64/3600 {
 			seconds := hours * 3600
@@ -114,7 +125,11 @@ func (b *telemetry) containerMetrics(result, stats collectionResult) {
 		ttl := b.cfg.StaleAfter
 		attrs := metadata(container, "name", "image", "ports")
 		attrs["container_id"] = id
-		b.text("containers", id, "status", prefix+" status", container.text("status"), source, ttl, false, false, attrs)
+		status := container.text("status")
+		if status == "" && b.cfg.GroupEntities {
+			status = "unknown"
+		}
+		b.text("containers", id, "status", prefix+" status", status, source, ttl, false, false, attrs)
 		if state, ok := container.uint("health"); ok && state < 4 {
 			b.text("containers", id, "health", prefix+" health", []string{"none", "starting", "healthy", "unhealthy"}[state], source, ttl, false, false, nil)
 		}
@@ -160,6 +175,9 @@ func (b *telemetry) serviceMetrics(result collectionResult) {
 		prefix := "Service " + name
 		source := recordTime(service, "updated")
 		ttl := b.cfg.StaleAfter
+		if state, ok := service.uint("state"); b.cfg.GroupEntities && (!ok || state >= 6) {
+			b.text("services", id, "state", prefix+" state", "unknown", source, ttl, false, false, map[string]any{"service": name})
+		}
 		for _, entry := range []struct {
 			field, key string
 			names      []string
