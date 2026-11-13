@@ -103,6 +103,10 @@ import yaml,sys
 print(' '.join(yaml.safe_load(open(sys.argv[1]+'/config.yaml'))['arch']))" "$1"
 }
 
+app_version() {
+    sed -nE 's/^version: "(.*)"$/\1/p' "$1/config.yaml"
+}
+
 # Debian base if the Dockerfile installs with apt-get, Alpine otherwise. Derived
 # rather than configured so the two cannot drift apart.
 app_base() {
@@ -216,8 +220,12 @@ if [ "${DO_STATIC}" -eq 1 ]; then
             fail "${app}: run.sh has a syntax error"; ok=0
         fi
 
-        v="$(grep '^version:' "${app}/config.yaml" | sed -E 's/version: "(.*)"/\1/')"
-        if [ "${v}" != "${REFERENCE_VERSION}" ]; then
+        v="$(app_version "${app}")"
+        if [ "${kind}" = "bridge" ]; then
+            if ! [[ "${v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+                fail "${app}: missing or invalid independent app version ${v}"; ok=0
+            fi
+        elif [ "${v}" != "${REFERENCE_VERSION}" ]; then
             fail "${app}: version ${v} does not match beszel_agent ${REFERENCE_VERSION}"; ok=0
         fi
 
@@ -343,7 +351,7 @@ if [ "${DO_BUILD}" -eq 1 ]; then
         info "${app}: ${platform} from $(basename "${base}")${note}"
         build_log="$(mktemp "${TMPDIR:-/tmp}/beszel-build-${app}.XXXXXX")" || exit 1
         if docker build --progress=plain --platform "${platform}" --build-arg "BUILD_FROM=${base}" \
-                --build-arg "BUILD_VERSION=${REFERENCE_VERSION}" \
+                --build-arg "BUILD_VERSION=$(app_version "${app}")" \
                 -t "${image}" "${app}/" >"${build_log}" 2>&1; then
             rm -f "${build_log}"
             CREATED_IMAGES="${CREATED_IMAGES} ${image}"
@@ -429,8 +437,9 @@ BRIDGEJSON
             [ "${healthy}" -eq 1 ] || { fail "${app}: liveness failed during Hub outage"; ok=0; }
             bridge_version="$(docker exec "${cname}" /usr/local/bin/bridge version 2>/dev/null)"
             bridge_label="$(docker image inspect "${image}" --format '{{index .Config.Labels "io.hass.version"}}')"
-            if [ "${bridge_version}" != "${REFERENCE_VERSION}" ] || [ "${bridge_label}" != "${REFERENCE_VERSION}" ]; then
-                fail "${app}: binary/image metadata does not match app version ${REFERENCE_VERSION}"; ok=0
+            expected_version="$(app_version "${app}")"
+            if [ "${bridge_version}" != "${expected_version}" ] || [ "${bridge_label}" != "${expected_version}" ]; then
+                fail "${app}: binary/image metadata does not match app version ${expected_version}"; ok=0
             fi
         else
             sleep 8

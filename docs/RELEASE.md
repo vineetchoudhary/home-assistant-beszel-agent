@@ -6,13 +6,14 @@ Use the [Build and Publish workflow](../.github/workflows/publish.yml) to publis
 | --- | --- |
 | Scheduled, every 8 hours | Check upstream, update versions and pins, publish images and create a release. Skip when current. |
 | Tag `vX.Y.Z` or `vX.Y.Z.W` | Build all apps using the tag's version and existing Beszel pins. |
-| Manual run | Choose an app or `all`. Single-app rebuilds create no release. Use `force_rebuild` for an unchanged `all` build. |
+| Manual run | Choose `all`, `all-except-bridge`, or one app. Set `bridge_version` with `bridge` to publish an independent Bridge update. |
 
 ## Manual build choices
 
 | `image_type` | Directory |
 | --- | --- |
 | `all` | All apps |
+| `all-except-bridge` | All Agent variants and Hub; Bridge is excluded |
 | `stable` | `beszel_agent` |
 | `smart` | `beszel_agent_smart` |
 | `intel` | `beszel_agent_intel` |
@@ -21,11 +22,19 @@ Use the [Build and Publish workflow](../.github/workflows/publish.yml) to publis
 | `hub` | `beszel_hub` |
 | `bridge` | `beszel_bridge` |
 
-When adding an app, update the workflow's build helpers and choices. Publish its images before advertising installation because unchanged versions can make scheduled runs skip it.
+These choices and version overrides are available only on **Run workflow**. Select a branch for a manual run so the workflow can commit its version updates. Scheduled checks and pushed `v*` tags always select all apps.
+
+To release an upstream update while leaving Bridge untouched, select `all-except-bridge`. The workflow updates, tests and publishes only the six Agent/Hub apps, then creates the normal `v<version>` tag and GitHub release. It skips Bridge compatibility checks and preserves Bridge's configuration and changelog. If upstream is already current, enable `force_rebuild` to rebuild those six images; forced full builds create no new GitHub release.
+
+To publish only a Bridge update, select `bridge` and enter a newer `bridge_version`, for example `0.21.1.4`. The workflow tests Bridge against the repository-pinned Hub version, updates only Bridge, and publishes its images and a `bridge-v<version>` GitHub release. This release does not replace the repository-wide **Latest** release or trigger another full build. Agent/Hub versions and upstream pins stay in place. Leave `bridge_version` blank to rebuild Bridge at its existing version without creating a new release. Versions use three or four numeric components; an older Bridge version is rejected. A newer explicit Bridge version creates its release even when `force_rebuild` is enabled.
+
+Other single-app choices rebuild the selected app at the current shared Agent/Hub version and create no GitHub release. `bridge_version` is accepted only with `image_type=bridge`.
+
+When adding an app, update the workflow's app table and choices and the release planner's `IMAGE_TYPES`. Publish its images before advertising installation because unchanged versions can make scheduled runs skip it.
 
 ## Versions and architectures
 
-The workflow uses `beszel_agent/config.yaml` as its app-version reference. Keep all app versions, image tags and the release tag aligned. The six Hub/Agent apps pin upstream binaries in `beszel_version`. Automatic releases update both versions. Tag releases keep existing binary pins.
+The workflow uses `beszel_agent/config.yaml` as the shared Agent/Hub version reference. Those six apps also pin upstream binaries in `beszel_version`. Automatic releases update both versions. Tag releases keep existing binary pins. Bridge can carry its own app version after a scoped release. Every image's version must match its own app's `config.yaml`; full builds preserve an independently published Bridge version when it is newer than the shared version.
 
 The Bridge has no bundled Beszel binary. Its [compatibility policy](../beszel_bridge/compatibility.json) records tested Hub versions. New versions are accepted automatically, and the workflow tests the candidate Hub before publishing.
 

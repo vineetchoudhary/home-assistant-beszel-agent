@@ -147,8 +147,8 @@ if [ -n "${BESZEL_VERSION}" ]; then
     valid_version "${BESZEL_VERSION}" || die "Not a version number: ${BESZEL_VERSION}"
 fi
 
-# Every app must carry a version: line, or the bump would silently skip it and
-# leave the repository with apps on two different versions.
+# Every app must carry a version: line so this explicit bulk bump updates all
+# apps, including a Bridge version previously released independently.
 for app in ${APPS}; do
     [ -f "${app}/config.yaml" ]    || die "${app}: no config.yaml"
     if bundles_beszel "${app}"; then
@@ -234,8 +234,7 @@ if [ "${DRY_RUN}" -eq 1 ]; then
     exit 0
 fi
 
-# All apps share one version number, and a mismatch means Home Assistant cannot
-# install whichever app fell behind.
+# This explicit bulk bump requests the same version for every app.
 for app in ${APPS}; do
     [ "$(config_version "${app}")" = "${APP_VERSION}" ] \
         || die "${app}: version did not settle at ${APP_VERSION}"

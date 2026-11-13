@@ -11,12 +11,15 @@ Run commands from the repository root. Container tests need Docker, Git and Pyth
 | Build and startup for one app | `./scripts/test-apps.sh beszel_hub` |
 | Mock Supervisor configuration loading | `./scripts/test-apps.sh --supervisor` |
 | Container test runner regressions | `python3 -B scripts/test-ci-runners.py` |
+| Release scope, versions and publication regressions | `python3 -B scripts/test-release-workflow.py` |
 | Agent key sources and SSH authorization | `python3 scripts/test-agent-keys.py` |
 | Hub registration and readings from every Agent | `./scripts/test-e2e.sh --all-agents` |
 
 For `test-apps.sh`, add `--no-smoke` to build without running containers, or `--keep` to retain built images. Use `--supervisor` for startup-script changes.
 
 For `test-e2e.sh`, omit `--all-agents` to test only the standard Agent. `--keep` prints the Hub URL, login and cleanup commands. Run `./scripts/test-e2e.sh --clean` to remove retained test resources.
+
+`test-release-workflow.py` checks manual scope selection, independent Bridge versions, scheduled/tag behavior, version preservation and release metadata. It executes the workflow's actual selection, version-update and publication scripts against disposable app files with simulated build, Git and GitHub commands; it does not publish images, push commits or create releases.
 
 `test-agent-keys.py` builds the standard Agent image and runs every variant's startup script with real Bashio and SSH keys. It checks inline keys, file precedence, environment overrides and invalid files, including rejection of unlisted keys. Pass Agent directory names to select variants or `--image IMAGE` to reuse a built app image. These tests do not exercise hardware collectors.
 
