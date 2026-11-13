@@ -1,0 +1,36 @@
+configuration:
+  key:
+    name: Hub public key
+    description: "SSH public key from the Hub's Add System dialog. Required unless a key file is set."
+  key_file:
+    name: Public key file
+    description: "Path to a public key file, such as /ssl/beszel_authorized_keys. Overrides the public key field."
+  hub_url:
+    name: Hub URL
+    description: "Direct Hub URL, including port and base path. Do not use a Home Assistant Ingress URL."
+  token:
+    name: Registration token
+    description: "System registration token from the Hub's Add System dialog."
+  environment_vars:
+    name: Environment variables
+    description: "Optional Beszel Agent settings as name/value pairs."
+    fields:
+      name:
+        name: Variable name
+        description: "Beszel environment variable, such as LOG_LEVEL."
+      value:
+        name: Value
+        description: "Setting value as text, such as debug or true."
+  custom_volumes:
+    name: Path checks
+    description: "Check paths already visible inside the app; this does not mount host directories."
+    fields:
+      host_path:
+        name: Host path label
+        description: "Host path label shown in startup logs."
+      container_path:
+        name: App path
+        description: "Existing path inside the app to check, such as /ssl."
+network:
+  45876/tcp: "Agent SSH port for incoming Hub connections."
+  45877/tcp: "Watchdog health checks on fixed port 45877."

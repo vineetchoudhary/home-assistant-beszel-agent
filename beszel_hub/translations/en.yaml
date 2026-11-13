@@ -1,0 +1,19 @@
+configuration:
+  app_url:
+    name: Hub URL
+    description: "Reachable Hub URL for links and Agent setup. Include any base path."
+  ingress_user:
+    name: Ingress login account
+    description: "Hub account email for automatic panel login. Everyone opening the panel uses this account. Blank disables it."
+  environment_vars:
+    name: Environment variables
+    description: "Optional Beszel Hub settings as name/value pairs."
+    fields:
+      name:
+        name: Variable name
+        description: "Hub environment variable, such as LOG_LEVEL."
+      value:
+        name: Value
+        description: "Setting value as text, such as debug or true."
+network:
+  8090/tcp: "Hub web interface, API and Watchdog. Keep mapped when Watchdog is enabled."

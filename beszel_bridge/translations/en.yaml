@@ -1,0 +1,80 @@
+configuration:
+  cleanup:
+    name: Remove Bridge entities
+    description: "Remove this Bridge's MQTT entities and exit. Turn off again for normal operation."
+  hub_url:
+    name: Hub URL
+    description: "Direct Hub URL, including port and base path. Do not use a Home Assistant Ingress URL."
+  hub_email:
+    name: Hub account email
+    description: "Email of a normal Hub account with access to the systems to monitor."
+  hub_password:
+    name: Hub account password
+    description: "Password for the Hub account above."
+  hub_ca_file:
+    name: Hub CA certificate
+    description: "Optional PEM CA file under /ssl for a private HTTPS certificate. Blank uses system trust."
+  mqtt_source:
+    name: MQTT settings source
+    description: "Use Supervisor for a broker app, or Manual to enter connection details below."
+  mqtt_host:
+    name: MQTT host
+    description: "Manual mode: broker hostname or IP address, without a scheme or port."
+  mqtt_port:
+    name: MQTT port
+    description: "Manual mode: broker port, usually 1883 or 8883 for TLS."
+  mqtt_username:
+    name: MQTT username
+    description: "Manual mode: broker username, if required."
+  mqtt_password:
+    name: MQTT password
+    description: "Manual mode: broker password, if required."
+  mqtt_tls:
+    name: MQTT TLS
+    description: "Manual mode: encrypt the MQTT connection. Match the broker's TLS port."
+  mqtt_ca_file:
+    name: MQTT CA certificate
+    description: "Optional PEM CA file under /ssl for MQTT TLS in either source mode. Blank uses system trust."
+  include_systems:
+    name: Include systems
+    description: "Monitor these 15-character Hub system IDs. Leave empty to include all accessible systems."
+  exclude_systems:
+    name: Exclude systems
+    description: "Skip these Hub system IDs, even when included above."
+  metrics:
+    name: Metrics
+    description: "Metric keys or families to publish. Leave empty for all; status and diagnostics are always included."
+  group_entities:
+    name: Group detail entities
+    description: "Put SMART disk, container and systemd service details in status entity attributes. Off keeps separate entities."
+  enable_all_entities:
+    name: Enable all entities
+    description: "Enable optional entities, including existing ones. Entities you disabled yourself stay disabled."
+  history_retention_days:
+    name: Entity history retention (days)
+    description: "Delete selected Bridge entities' recorded states older than this many days. 0 disables cleanup."
+  poll_interval:
+    name: Poll interval (seconds)
+    description: "Time between Hub polls, from 15 to 300 seconds."
+  stale_after:
+    name: Reading timeout (seconds)
+    description: "Maximum sample age. 0 uses the larger of 180 seconds or three poll intervals."
+  detail_stale_after:
+    name: Detail timeout (seconds)
+    description: "Maximum age of SMART, storage pool and package details. Default: 172800 seconds (48 hours)."
+  disk_aggregate_exclude:
+    name: Exclude from combined disk totals
+    description: "Omit system/filesystem pairs from combined totals. Individual disk readings stay available."
+    fields:
+      system:
+        name: System ID
+        description: "15-character Hub system record ID."
+      filesystem:
+        name: Filesystem key
+        description: "Source key from the filesystem entity's attributes; use root for the primary disk."
+  discovery_prefix:
+    name: MQTT discovery prefix
+    description: "Match Home Assistant's MQTT discovery prefix. Clean up Bridge entities before changing it."
+  ha_status_topic:
+    name: Home Assistant status topic
+    description: "Match Home Assistant's MQTT birth/status topic. Default: homeassistant/status."
