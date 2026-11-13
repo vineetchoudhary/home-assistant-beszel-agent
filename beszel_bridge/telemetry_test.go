@@ -435,7 +435,7 @@ func TestCollectorPaginationConcurrencyAndCache(t *testing.T) {
 }
 
 func TestExpandedLegacyVersionsAndIdleCapability(t *testing.T) {
-	for _, version := range []string{"0.20.0", "0.21.0", "0.21.1"} {
+	for _, version := range []string{"0.20.0", "0.21.0", "0.21.1", "0.21.2"} {
 		t.Run(version, func(t *testing.T) {
 			system := fixture[page[System]](t, version, "systems.json").Items[0]
 			sample := fixture[page[Sample]](t, version, "system_stats.json").Items[0]

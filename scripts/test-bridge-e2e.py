@@ -248,6 +248,14 @@ class Lab:
     def component_key(family, identity, metric):
         return family + "_" + hashlib.sha256(identity.encode()).hexdigest()[:24] + "_" + metric
 
+    def assert_no_temperature_sensors(self, snapshot):
+        prefix = self.namespace + "_" + self.system_id + "_"
+        assert not any(
+            entity["unique_id"] == prefix + "temperature"
+            or entity["unique_id"].startswith(prefix + "temperatures_")
+            for entity in snapshot["entities"]
+        ), "invented temperature without a source sensor"
+
     def expanded_metric_checks(self):
         # Synthetic hardware responses pass through the authenticated HTTPS Hub
         # proxy, then the actual Bridge, broker and HA discovery/registry stack.
@@ -255,6 +263,10 @@ class Lab:
         fault.write_text(json.dumps({"expanded": True}))
         combined = "filesystems_combined_usage"
         self.wait("weighted multi-disk usage reaches HA", lambda: self.entity(combined) and self.entity(combined)["state"] == "14")
+        self.wait("source temperature reaches HA", lambda: self.entity("temperature") and self.entity("temperature")["state"] in ("40", "40.0"))
+        ambient = self.component_key("temperatures", "ambient", "temperature")
+        self.snapshot(enable_key=ambient)
+        self.wait("observed zero temperature remains a valid sensor", lambda: self.entity(ambient) and self.entity(ambient)["state"] in ("0", "0.0"))
         smart = self.component_key("smart", "smt000000000001", "status")
         seconds = self.component_key("smart", "smt000000000001", "power_on_seconds")
         human = self.component_key("smart", "smt000000000001", "power_on_human")
@@ -503,9 +515,15 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         self.admin_token = auth["token"]
         info = api("/api/beszel/info", token=self.admin_token)
         registration = api("/api/beszel/universal-token?enable=1", token=self.admin_token)["token"]
-        self.agent = self.start("agent", f"henrygd/beszel-agent:{self.args.hub_version}", "--hostname", "bridge-test-server", "-e", "KEY=" + info["key"], "-e", "TOKEN=" + registration, "-e", "HUB_URL=http://hub:8090")
+        # Explicitly disable temperature collection for the absent-capability
+        # check. CI hosts may expose real sensors through the container's sysfs.
+        # The expanded proxy fixture exercises present sensors, including zero.
+        self.agent = self.start("agent", f"henrygd/beszel-agent:{self.args.hub_version}", "--hostname", "bridge-test-server", "-e", "SENSORS=", "-e", "KEY=" + info["key"], "-e", "TOKEN=" + registration, "-e", "HUB_URL=http://hub:8090")
         system = self.wait("real Agent reports metrics to Hub", lambda: next((row for row in api("/api/collections/systems/records", token=self.admin_token)["items"] if row["status"] == "up"), None))
         self.system_id = system["id"]
+        query = urllib.parse.urlencode({"filter": "system='" + self.system_id + "' && type='1m'", "sort": "-created", "perPage": 1})
+        samples = self.wait("real Agent provides the sensor-free baseline sample", lambda: self.source_sample(api, self.admin_token, query))
+        assert not samples["items"][0]["stats"].get("t"), "Test Agent unexpectedly reported temperature sensors"
         super_token = api("/api/collections/_superusers/auth-with-password", {"identity": "admin@example.test", "password": password})["token"]
         reader_password = secrets.token_urlsafe(24)
         reader = api("/api/collections/users/records", {"email": "reader@example.test", "password": reader_password, "passwordConfirm": reader_password, "role": "readonly", "verified": True}, super_token)
@@ -582,7 +600,7 @@ with urllib.request.urlopen(r,timeout=15) as response: print(response.read().dec
         identities = {entity["unique_id"]: entity["entity_id"] for entity in baseline["entities"]}
         assert len(baseline["devices"]) == 2, "Expected Bridge and monitored server devices"
         assert self.entity("cpu_usage")["attributes"]["unit_of_measurement"] == "%"
-        assert not any(entity["unique_id"].endswith("_temperature") for entity in baseline["entities"]), "invented temperature without a source sensor"
+        self.assert_no_temperature_sensors(baseline)
         self.checks.append("device grouping, units, and absent sensor capability")
         # Rename in the actual Hub; stable IDs and HA customizations must survive.
         self.hub_api("/api/collections/systems/records/" + self.system_id, {"name": "Renamed lab server"}, self.admin_token, "PATCH")

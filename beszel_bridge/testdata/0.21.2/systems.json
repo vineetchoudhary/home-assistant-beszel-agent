@@ -1,0 +1,38 @@
+{
+  "items": [
+    {
+      "collectionId": "2hz5ncl8tizk5nx",
+      "collectionName": "systems",
+      "created": "2026-11-13 03:58:39.779Z",
+      "host": "example-host",
+      "id": "sys000000000001",
+      "info": {
+        "t": 12,
+        "u": 38,
+        "cpu": 50,
+        "mp": 10.09,
+        "dp": 3.9,
+        "v": "0.21.2",
+        "bb": 0,
+        "la": [
+          0,
+          0,
+          0
+        ],
+        "ct": 2
+      },
+      "name": "Example server",
+      "port": "45876",
+      "status": "up",
+      "updated": "2026-11-13 03:58:40.407Z",
+      "users": [
+        "usr000000000001",
+        "usr000000000002"
+      ]
+    }
+  ],
+  "page": 1,
+  "perPage": 100,
+  "totalItems": 1,
+  "totalPages": 1
+}

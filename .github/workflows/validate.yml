@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        hub: ["0.20.0", "0.21.0", "0.21.1"]
+        hub: ["0.20.0", "0.21.0", "0.21.1", "0.21.2"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5

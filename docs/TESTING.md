@@ -27,9 +27,12 @@ For `test-e2e.sh`, omit `--all-agents` to test only the standard Agent. `--keep`
 python3 scripts/test-bridge-e2e.py --build --hub-version 0.20.0
 python3 scripts/test-bridge-e2e.py --build --hub-version 0.21.0
 python3 scripts/test-bridge-e2e.py --build --hub-version 0.21.1
+python3 scripts/test-bridge-e2e.py --build --hub-version 0.21.2
 ```
 
 The first command runs Go tests, vet, formatting and amd64/arm64 compilation. The end-to-end commands run Hub, Agent, MQTT and Home Assistant containers to check entities, dashboards, malformed fields, newer version metadata, outages, restarts and cleanup.
+
+The baseline Agent explicitly disables temperature collection with `SENSORS=` and the test verifies that its source sample has no temperature sensors before checking discovery. This keeps the missing-capability check independent of sensors exposed by the Docker host. Expanded proxy fixtures separately verify temperature discovery and a valid zero reading; SMART and GPU temperature entities are outside the baseline sensor check.
 
 Expanded tests cover disk aggregation/exclusions, SMART status/precision, large counters, hardware maps, containers/services, pool details, probe failures, package classification, account-owned alerts, discovery defaults and component-removal grace. The [expanded fixture](../beszel_bridge/testdata/expanded/monitoring.json) is synthetic and does not claim physical-hardware validation. Real-stack tests inject those responses through the authenticated HTTPS test proxy and verify the actual Bridge, MQTT integration, registry and states, including enabling disabled details.
 
@@ -43,7 +46,7 @@ History-retention tests check the disabled default, day bounds, exact renamed-en
 
 Add `--report .artifacts/bridge/report.json` to save results. `--keep` retains the environment and prints its URLs, container names, network and temporary directory. Remove those resources when finished. Otherwise cleanup is automatic.
 
-Add `--capture-fixtures .artifacts/bridge/fixtures/0.21.1` to capture sanitized readonly API responses in a new directory. Review them before adding fixtures and recording tested versions.
+Add `--capture-fixtures .artifacts/bridge/fixtures/0.21.2` to capture sanitized readonly API responses in a new directory. Review them before adding fixtures and recording tested versions.
 
 ### Setup screenshots
 
@@ -91,4 +94,4 @@ Inside a running Bridge container:
 
 ## Continuous integration
 
-The [validation workflow](../.github/workflows/validate.yml) runs static and Agent SSH authentication checks on relevant changes. Its manual full run adds builds for every app, startup checks, mock Supervisor, Agent/Hub end-to-end tests and a Bridge/Home Assistant matrix for Hub 0.20.0, 0.21.0 and 0.21.1. Containers do not cover Supervisor installation or physical hardware. Use the [HA OS checklist](MANUAL_CHECKLIST.md) to record those checks separately.
+The [validation workflow](../.github/workflows/validate.yml) runs static and Agent SSH authentication checks on relevant changes. Its manual full run adds builds for every app, startup checks, mock Supervisor, Agent/Hub end-to-end tests and a Bridge/Home Assistant matrix for Hub 0.20.0, 0.21.0, 0.21.1 and 0.21.2. Containers do not cover Supervisor installation or physical hardware. Use the [HA OS checklist](MANUAL_CHECKLIST.md) to record those checks separately.

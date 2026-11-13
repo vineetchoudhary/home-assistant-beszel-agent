@@ -113,5 +113,31 @@ class BridgeFileTests(unittest.TestCase):
         self.assertFalse(self.lab.directory.exists())
 
 
+class BridgeTemperatureTests(unittest.TestCase):
+    def setUp(self):
+        self.lab = BRIDGE_E2E.Lab(SimpleNamespace(keep=False))
+        self.addCleanup(shutil.rmtree, self.lab.directory, ignore_errors=True)
+        self.lab.namespace = "test_namespace"
+        self.lab.system_id = "test_system"
+
+    def snapshot(self, *metrics):
+        prefix = self.lab.namespace + "_" + self.lab.system_id + "_"
+        return {"entities": [{"unique_id": prefix + metric} for metric in metrics]}
+
+    def test_missing_sensors_allow_unrelated_temperature_entities(self):
+        snapshot = self.snapshot("cpu_usage", "smart_disk_temperature", "gpus_card_temperature")
+        snapshot["entities"].append({"unique_id": "another_system_temperature"})
+        self.lab.assert_no_temperature_sensors(snapshot)
+
+    def test_missing_sensors_reject_primary_temperature(self):
+        with self.assertRaisesRegex(AssertionError, "without a source sensor"):
+            self.lab.assert_no_temperature_sensors(self.snapshot("cpu_usage", "temperature"))
+
+    def test_missing_sensors_reject_detailed_temperature(self):
+        key = self.lab.component_key("temperatures", "cpu_package", "temperature")
+        with self.assertRaisesRegex(AssertionError, "without a source sensor"):
+            self.lab.assert_no_temperature_sensors(self.snapshot("cpu_usage", key))
+
+
 if __name__ == "__main__":
     unittest.main()
