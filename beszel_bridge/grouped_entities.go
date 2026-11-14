@@ -27,12 +27,14 @@ func groupedPrimary(family, component string) (string, string, bool) {
 
 var groupedAttributeNames = map[string]map[string]string{
 	"smart": {
-		"capacity": "capacity_bytes", "power_on_seconds": "power_on_seconds",
+		"capacity": "capacity_bytes", "capacity_readable": "capacity_readable", "power_on_seconds": "power_on_seconds",
 		"power_on_human": "power_on_human", "cycles": "power_cycles",
 		"temperature": "temperature_celsius", "last_updated": "last_updated",
 	},
 	"containers": {
 		"health": "health", "cpu": "cpu_usage_percent", "memory": "memory_bytes",
+		"memory_readable": "memory_readable", "bandwidth_readable": "bandwidth_readable",
+		"receive_readable": "receive_readable", "transmit_readable": "transmit_readable",
 		"bandwidth": "bandwidth_bytes_per_second", "receive": "receive_bytes_per_second",
 		"transmit": "transmit_bytes_per_second", "update_available": "update_available",
 		"last_updated": "last_updated",
@@ -40,6 +42,7 @@ var groupedAttributeNames = map[string]map[string]string{
 	"services": {
 		"substate": "substate", "cpu": "cpu_usage_percent", "cpu_peak": "cpu_peak_percent",
 		"memory": "memory_bytes", "memory_peak": "memory_peak_bytes", "last_updated": "last_updated",
+		"memory_readable": "memory_readable", "memory_peak_readable": "memory_peak_readable",
 	},
 }
 

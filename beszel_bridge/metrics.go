@@ -52,7 +52,7 @@ func metricValues(system System, sample *Sample) (map[string]string, time.Time, 
 			issues = append(issues, fmt.Errorf("missing or invalid %s", key))
 			continue
 		}
-		values[key] = number(*value)
+		values[key] = roundedNumber(*value)
 	}
 	if system.Info.Uptime != nil {
 		values["uptime"] = strconv.FormatUint(*system.Info.Uptime, 10)
@@ -103,6 +103,18 @@ func tupleRate(values []float64, index int) (float64, bool) {
 }
 func validNumber(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) }
 func number(n float64) string    { return strconv.FormatFloat(n, 'f', -1, 64) }
+func roundedNumber(n float64) string {
+	// Float64 values this large already have no fractional part. Avoid
+	// overflowing otherwise valid, unbounded per-service CPU percentages.
+	if math.Abs(n) >= 1<<52 {
+		return number(n)
+	}
+	n = math.Round(n*100) / 100
+	if n == 0 {
+		return "0"
+	}
+	return number(n)
+}
 func fresh(created, now time.Time, seconds int) bool {
 	return !created.IsZero() && !created.After(now.Add(30*time.Second)) && now.Sub(created) <= time.Duration(seconds)*time.Second
 }

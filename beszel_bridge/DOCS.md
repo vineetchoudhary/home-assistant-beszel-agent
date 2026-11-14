@@ -167,7 +167,7 @@ These original keys and identities remain supported. Selecting a family includes
 
 The Bridge device also exposes monitored/degraded system counts and an incomplete-inventory indicator. Sample age is an optional diagnostic entity on each server. These diagnostics are always selected.
 
-Existing entities, readable uptime, extra filesystem usage, combined storage overview and SMART overview entities are enabled by default. Other new entities are discovered disabled unless `enable_all_entities` is enabled.
+Existing entities, readable uptime, readable byte companions, extra filesystem usage, combined storage overview and SMART overview entities are enabled by default. Other new entities are discovered disabled unless `enable_all_entities` is enabled.
 
 To enable all available readings at once, set this option in the Bridge's **Configuration**, save and restart:
 
@@ -181,6 +181,16 @@ For individual readings, open the server under **Settings > Devices & services >
 
 Expanded readings have a `source_timestamp` attribute. Sizes use bytes, rates use `B/s`, latencies use milliseconds and temperatures use °C. Native bytes take precedence over legacy GiB/MiB fields. Home Assistant handles cumulative counter resets. Vendor SMART attributes retain their source encoding without guessed units or statistics classes.
 
+### Readable sizes and rates
+
+Every byte size, cumulative byte counter and byte-per-second rate also has a companion entity with a `readable` name suffix and an `_readable` metric-key suffix. For example, `memory_total_readable`, `disk_capacity_readable` and `network_receive_readable` accompany the original numeric entities. This covers memory, swap, filesystems, disk I/O, network traffic, GPU memory, SMART capacity, containers, services and storage pools, including peak readings.
+
+Readable values automatically select B, KB, MB, GB, TB, PB and larger units, with `/s` for rates and at most two decimal places. Prefixes use powers of 1,000, so 1,000 B becomes `1 KB`, 1,073,741,824 B becomes `1.07 GB` and 125,000,000 B/s becomes `125 MB/s`. Zero is `0 B` or `0 B/s`. Companions are enabled by default and follow the original reading's metric selection, source timestamp and availability.
+
+The original numeric byte entities keep their IDs, values, units and statistics classes. Use readable text entities in dashboard entity cards, and numeric entities for graphs, calculations and automations. Grouped SMART, container and service summaries include the corresponding readable values as attributes alongside raw byte attributes.
+
+All percentage entities publish values rounded to at most two decimal places, including original CPU/memory/disk usage, calculated percentages, per-component values and grouped percentage attributes. For example, `33.333333` becomes `33.33`, and `20.5` keeps one decimal place.
+
 ### Optional grouped entities
 
 The default layout keeps individual readings. To reduce the number of entities, enable **group_entities** in the Bridge app's **Configuration**, save and restart:
@@ -193,9 +203,9 @@ Grouping keeps one existing status entity per SMART disk and container, and one 
 
 | Summary | State | Attributes when reported |
 | --- | --- | --- |
-| SMART disk status | Disk health such as `PASSED` or `UNKNOWN`. | Device, model, type, firmware, serial, `capacity_bytes`, `temperature_celsius`, `power_cycles`, `power_on_hours`, `power_on_seconds`, `power_on_human`, `power_on_source_precision_seconds`, `last_updated` and `smart_attributes`. |
-| Container status | The Hub's reported status. | Name, container ID, image, ports, `health`, `cpu_usage_percent`, `memory_bytes`, `bandwidth_bytes_per_second`, `receive_bytes_per_second`, `transmit_bytes_per_second`, `update_available` and `last_updated`. |
-| Service state | State such as `active` or `failed`. | Service name, `substate`, `cpu_usage_percent`, `cpu_peak_percent`, `memory_bytes`, `memory_peak_bytes` and `last_updated`. |
+| SMART disk status | Disk health such as `PASSED` or `UNKNOWN`. | Device, model, type, firmware, serial, `capacity_bytes`, `capacity_readable`, `temperature_celsius`, `power_cycles`, `power_on_hours`, `power_on_seconds`, `power_on_human`, `power_on_source_precision_seconds`, `last_updated` and `smart_attributes`. |
+| Container status | The Hub's reported status. | Name, container ID, image, ports, `health`, `cpu_usage_percent`, `memory_bytes`, `memory_readable`, `bandwidth_bytes_per_second`, `bandwidth_readable`, `receive_bytes_per_second`, `receive_readable`, `transmit_bytes_per_second`, `transmit_readable`, `update_available` and `last_updated`. |
+| Service state | State such as `active` or `failed`. | Service name, `substate`, `cpu_usage_percent`, `cpu_peak_percent`, `memory_bytes`, `memory_readable`, `memory_peak_bytes`, `memory_peak_readable` and `last_updated`. |
 
 `smart_attributes` is a list of the drive's reported properties. Each item includes its name, ID when available, normalized/worst values, threshold, raw value/string and failure flag when reported. Unrecognized vendor fields are preserved. Large raw integers use an exact `raw_value` string. Selecting only `smart_attributes` also selects the disk status needed to carry them. Selecting only `smart` omits the vendor list. Unsupported values stay absent, and stale or ambiguous container receive/transmit samples are omitted. `attribute_timestamps` identifies values with a source timestamp different from the summary's source. Use `last_updated` to calculate age; changing readable ages are not included in grouped attributes.
 

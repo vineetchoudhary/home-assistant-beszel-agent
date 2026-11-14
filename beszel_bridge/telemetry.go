@@ -157,6 +157,11 @@ func (b *telemetry) add(family, identity, metric, name, value, unit, device, sta
 	if !b.cfg.enabled(family) && family != "diagnostics" {
 		return
 	}
+	if unit == "%" {
+		if v, err := strconv.ParseFloat(value, 64); err == nil && validNumber(v) {
+			value = roundedNumber(v)
+		}
+	}
 	if attributes == nil {
 		attributes = map[string]any{}
 	}
@@ -172,6 +177,11 @@ func (b *telemetry) add(family, identity, metric, name, value, unit, device, sta
 	b.readings[key] = reading{Key: key, Family: family, Component: b.component(family, identity), Value: value,
 		Definition: entityDefinition{Name: name, Unit: unit, DeviceClass: device, StateClass: state, Domain: "sensor", Enabled: enabled, Expiry: ttl, Diagnostic: family == "system_info" || family == "diagnostics"},
 		Source:     source, Snapshot: snapshot, Attributes: attributes}
+	if readable, ok := humanBytes(value, unit); ok {
+		// Text companions can change units without changing the numeric sensor's
+		// identity, precision, statistics or counter-reset handling.
+		b.text(family, identity, metric+"_readable", name+" readable", readable, source, ttl, true, snapshot, cloneAttrs(attributes))
+	}
 }
 func (b *telemetry) gauge(family, identity, metric, name string, v float64, ok bool, unit, device string, source time.Time, ttl int, enabled bool, attributes map[string]any) {
 	if !ok || !validNumber(v) {
@@ -240,6 +250,35 @@ func humanDuration(seconds uint64) string {
 		unit += "s"
 	}
 	return fmt.Sprintf("%d %s", value, unit)
+}
+
+// Use decimal prefixes: KB is 1,000 bytes. Keep the original numeric payload
+// untouched, including uint64 counters that cannot be represented as float64.
+func humanBytes(value, unit string) (string, bool) {
+	if unit != "B" && unit != "B/s" {
+		return "", false
+	}
+	v, err := strconv.ParseFloat(value, 64)
+	if err != nil || !validNonnegative(v) {
+		return "", false
+	}
+	units := [...]string{"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
+	i := 0
+	for v >= 1000 && i < len(units)-1 {
+		v /= 1000
+		i++
+	}
+	v = math.Round(v*100) / 100
+	// Rounding at a unit boundary should show 1 MB rather than 1000 KB.
+	if v >= 1000 && i < len(units)-1 {
+		v /= 1000
+		i++
+	}
+	suffix := ""
+	if unit == "B/s" {
+		suffix = "/s"
+	}
+	return number(v) + " " + units[i] + suffix, true
 }
 
 func recordTime(o rawObject, field string) time.Time {

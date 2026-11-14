@@ -40,6 +40,14 @@ func (b *telemetry) systemMetrics(sample *Sample) {
 	if b.system.Info.Uptime != nil {
 		b.text("uptime_human", "", "", "Uptime readable", humanDuration(*b.system.Info.Uptime), source, ttl, true, false, nil)
 	}
+	// Original aggregate network entities are published separately. Keep their
+	// readable companions available even when only a narrow legacy key is selected.
+	values, _, _ := metricValues(b.system, sample)
+	for _, key := range []string{"network_receive", "network_transmit"} {
+		if readable, ok := humanBytes(values[key], metricDefinitions[key].Unit); ok {
+			b.text(key, "", "readable", metricDefinitions[key].Name+" readable", readable, source, ttl, true, false, nil)
+		}
+	}
 	if !source.After(b.now.Add(30 * time.Second)) {
 		b.add("diagnostics", "", "sample_age", "Sample age", strconv.FormatUint(uint64(max(0, b.now.Sub(source).Seconds())), 10), "s", "duration", "measurement", source, ttl, false, true, nil)
 	}

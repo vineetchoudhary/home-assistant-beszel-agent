@@ -23,7 +23,7 @@ views:
             name: Uptime
           - entity: sensor.beszel_server_filesystems_combined_usage
             name: Combined filesystem usage
-          - entity: sensor.beszel_server_filesystems_combined_free
+          - entity: sensor.beszel_server_filesystems_combined_free_readable
             name: Combined filesystem free
           - entity: sensor.beszel_server_last_sample
             name: Last sample

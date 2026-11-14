@@ -82,6 +82,8 @@ class Proxy(http.server.BaseHTTPRequestHandler):
             elif collection=='system_stats':
                 sample=fixture['peak'] if "type='10m'" in urllib.parse.parse_qs(parsed.query).get('filter',[''])[0] else fixture['sample']
                 sample.update(system=system_id,created=timestamp())
+                if fault.get('readable_precision') and sample['type']=='1m':
+                    sample['stats'].update(cpu=12.3456,mp=33.3333333333,dp=99.9999,mem=[500000,125000,0,0],b=[1250000,125000000],cpus=[10.123456,30])
                 if fault.get('expanded_bad_disk'): sample['stats'].setdefault('efs',{}).setdefault('data',{})['d']='changed-shape'
                 data=json.dumps({'page':1,'totalPages':1,'totalItems':1,'items':[sample]}).encode(); status=200
             elif collection in fixture and isinstance(fixture[collection],list):
@@ -277,6 +279,7 @@ class Lab:
         assert self.entity(smart)["attributes"]["model"] == "CT1000BX500SSD1"
         assert self.entity("uptime_human")["state"] == "20 hours"
         self.checks.append("SMART metadata, raw seconds and readable durations reach HA")
+        self.wait("readable byte companions are available by default", lambda: self.entity("memory_total_readable") and self.entity("memory_total_readable")["state"] == "8.59 GB")
         core = self.component_key("cpu", "0", "usage")
         registry = self.snapshot()["entities"]
         entity = next(row for row in registry if row["unique_id"] == self.namespace + "_" + self.system_id + "_" + core)
@@ -288,6 +291,7 @@ class Lab:
         self.snapshot(enable_key=raw_key)
         self.wait("raw SMART attribute preserves large integer metadata", lambda: self.entity(raw_key) and self.entity(raw_key)["attributes"].get("raw_value") == "9007199254740993")
         self.enable_all_entity_checks()
+        self.readable_metric_checks()
         self.history_retention_checks()
         self.grouped_entity_checks()
         fault.write_text(json.dumps({"expanded": True, "expanded_bad_disk": True}))
@@ -295,6 +299,39 @@ class Lab:
         fault.write_text(json.dumps({"expanded": True}))
         self.wait("valid disk recovers combined usage", lambda: self.entity(combined)["state"] == "14")
         fault.unlink()
+
+    def readable_metric_checks(self):
+        def match(expected):
+            snapshot = self.snapshot()
+            entities = {entity["unique_id"]: entity["entity_id"] for entity in snapshot["entities"]}
+            for key, want in expected.items():
+                entity_id = entities.get(self.namespace + "_" + self.system_id + "_" + key)
+                state = snapshot["states"].get(entity_id, {}).get("state")
+                if isinstance(want, (int, float)):
+                    if state is None or float(state) != want:
+                        return False
+                elif state != want:
+                    return False
+            return True
+
+        original = {"memory_total": 8589934592, "memory_total_readable": "8.59 GB",
+                    "disk_capacity": 107374182400, "disk_capacity_readable": "107.37 GB",
+                    "network_receive": 200, "network_receive_readable": "200 B/s",
+                    self.component_key("disk_io", "root", "write_total_readable"): "18.45 EB"}
+        self.wait("readable sizes and rates coexist with original numeric entities", lambda: match(original))
+        companion = self.entity("memory_total_readable")
+        assert "unit_of_measurement" not in companion["attributes"] and "state_class" not in companion["attributes"], "Readable text was treated as numeric statistics"
+        baseline = {entity["unique_id"]: entity["entity_id"] for entity in self.snapshot()["entities"]}
+        fault = self.directory / "proxy-fault.json"
+        fault.write_text(json.dumps({"expanded": True, "readable_precision": True}))
+        self.wait("readable units change automatically and percentages use two decimal places", lambda: match({
+            "memory_total": 500000, "memory_total_readable": "500 KB", "cpu_usage": 12.35,
+            "memory_usage": 33.33, "disk_usage": 100,
+            self.component_key("cpu", "0", "usage"): 10.12,
+            "network_receive": 125000000, "network_receive_readable": "125 MB/s"}))
+        fault.write_text(json.dumps({"expanded": True}))
+        self.wait("readable units recover after sample changes", lambda: match(original))
+        self.assert_identities_preserved(baseline)
 
     def grouped_entity_checks(self):
         baseline = self.snapshot()
@@ -333,10 +370,14 @@ class Lab:
             attrs = disk.get("attributes", {})
             return (disk.get("state") == "PASSED" and attrs.get("power_on_seconds") == 72000
                     and attrs.get("temperature_celsius") == 32
+                    and attrs.get("capacity_readable") == "1 TB"
                     and any(row.get("raw_value") == "9007199254740993" for row in attrs.get("smart_attributes", []))
                     and app.get("attributes", {}).get("memory_bytes") == 134217728
+                    and app.get("attributes", {}).get("memory_readable") == "134.22 MB"
                     and app.get("attributes", {}).get("receive_bytes_per_second") == 200
+                    and app.get("attributes", {}).get("receive_readable") == "200 B/s"
                     and daemon.get("state") == "failed"
+                    and daemon.get("attributes", {}).get("memory_readable") == "12.35 MB"
                     and daemon.get("attributes", {}).get("cpu_usage_percent") == 0)
 
         self.wait("optional grouping replaces SMART, container and service details with attributes", grouped, timeout=120)

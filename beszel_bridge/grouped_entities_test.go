@@ -73,6 +73,9 @@ func TestGroupedDiskContainerAndServiceProperties(t *testing.T) {
 	if attrs.text("power_on_human") != "20 hours" || attrs.text("device") != "/dev/sda" || attrs.text("model") != "CT1000BX500SSD1" || attrs.text("last_updated") == "" {
 		t.Fatal("lost SMART metadata or readable power-on time", attrs)
 	}
+	if attrs.text("capacity_readable") != "1 TB" {
+		t.Fatal("lost readable SMART capacity", attrs)
+	}
 	attributes := array(attrs["smart_attributes"])
 	crc := obj(attributes[len(attributes)-1])
 	if crc.text("name") != "CRC_Error_Count" || crc.text("raw_value") != "9007199254740993" || string(crc["id"]) != "199" {
@@ -94,9 +97,17 @@ func TestGroupedDiskContainerAndServiceProperties(t *testing.T) {
 	if container.text("health") != "healthy" || container.text("last_updated") == "" {
 		t.Fatal("lost container health or update time")
 	}
+	for field, want := range map[string]string{"memory_readable": "134.22 MB", "bandwidth_readable": "300 B/s", "receive_readable": "200 B/s", "transmit_readable": "100 B/s"} {
+		if container.text(field) != want {
+			t.Errorf("container %s: %s, want %s", field, container.text(field), want)
+		}
+	}
 	service := readingAttrs(t, requireValue(t, b, "services", "svc000000000001", "state", "failed"))
 	if service.text("substate") != "failed" || string(service["cpu_usage_percent"]) != "0" || string(service["memory_bytes"]) != "12345678" || string(service["memory_peak_bytes"]) != "23456789" {
 		t.Fatal("lost service properties", service)
+	}
+	if service.text("memory_readable") != "12.35 MB" || service.text("memory_peak_readable") != "23.46 MB" {
+		t.Fatal("lost readable service memory", service)
 	}
 	requireValue(t, b, "cpu", "0", "usage", "10")
 	// Repeated grouping must not discard previously attached attributes.
@@ -132,6 +143,23 @@ func TestGroupedSMARTSelectionAndVendorProperties(t *testing.T) {
 	}
 }
 
+func TestGroupedPercentagePrecision(t *testing.T) {
+	data, b, _ := expandedFixture(t)
+	b.cfg.GroupEntities = true
+	containers := expandedRecords(data, "containers")
+	containers.Rows[0]["cpu"] = json.RawMessage(`33.3333333333`)
+	services := expandedRecords(data, "systemd_services")
+	services.Rows[0]["cpuPeak"] = json.RawMessage(`125.5555`)
+	b.containerMetrics(containers, expandedRecords(data, "container_stats"))
+	b.serviceMetrics(services)
+	b.groupReadings()
+	container := readingAttrs(t, requireValue(t, b, "containers", "abcdef123456", "status", "Up 20 hours"))
+	service := readingAttrs(t, requireValue(t, b, "services", "svc000000000001", "state", "failed"))
+	if string(container["cpu_usage_percent"]) != "33.33" || string(service["cpu_peak_percent"]) != "125.56" {
+		t.Fatal("grouped percentages were not rounded as numbers", container, service)
+	}
+}
+
 func TestGroupedStaleAndAmbiguousContainerRates(t *testing.T) {
 	for _, mode := range []string{"fresh", "stale", "duplicate name", "invalid rate"} {
 		t.Run(mode, func(t *testing.T) {
@@ -157,7 +185,9 @@ func TestGroupedStaleAndAmbiguousContainerRates(t *testing.T) {
 			attrs := readingAttrs(t, requireValue(t, b, "containers", "abcdef123456", "status", "Up 20 hours"))
 			_, receive := attrs["receive_bytes_per_second"]
 			_, transmit := attrs["transmit_bytes_per_second"]
-			if receive != (mode == "fresh") || transmit != (mode == "fresh") || string(attrs["memory_bytes"]) != "134217728" {
+			_, receiveReadable := attrs["receive_readable"]
+			_, transmitReadable := attrs["transmit_readable"]
+			if receive != (mode == "fresh") || transmit != (mode == "fresh") || receiveReadable != receive || transmitReadable != transmit || string(attrs["memory_bytes"]) != "134217728" {
 				t.Fatal("invalid rates contaminated the current inventory properties", attrs)
 			}
 		})

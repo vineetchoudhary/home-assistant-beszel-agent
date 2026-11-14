@@ -99,7 +99,7 @@ async def main():
                     def component_key(family, identity, metric):
                         return family + "_" + hashlib.sha256(identity.encode()).hexdigest()[:24] + "_" + metric
                     aliases = {"extra_disk_usage": component_key("filesystems", "data", "usage")}
-                    for field in ("status", "capacity", "power_on_seconds", "power_on_human", "cycles", "temperature", "last_updated", "updated_human"):
+                    for field in ("status", "capacity", "capacity_readable", "power_on_seconds", "power_on_human", "cycles", "temperature", "last_updated", "updated_human"):
                         aliases["smart_" + field] = component_key("smart", "smt000000000001", field)
                     for alias, metric in aliases.items():
                         assert metric in metric_entities, "Storage template requires the expanded fixture's entities"

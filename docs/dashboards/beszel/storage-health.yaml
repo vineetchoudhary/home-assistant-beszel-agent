@@ -14,11 +14,11 @@ views:
             name: Data filesystem
           - entity: sensor.beszel_server_filesystems_combined_usage
             name: Combined usage
-          - entity: sensor.beszel_server_filesystems_combined_capacity
+          - entity: sensor.beszel_server_filesystems_combined_capacity_readable
             name: Combined capacity
-          - entity: sensor.beszel_server_filesystems_combined_used
+          - entity: sensor.beszel_server_filesystems_combined_used_readable
             name: Combined used
-          - entity: sensor.beszel_server_filesystems_combined_free
+          - entity: sensor.beszel_server_filesystems_combined_free_readable
             name: Combined free
       - type: entities
         title: SMART disk health
@@ -26,7 +26,7 @@ views:
         entities:
           - entity: sensor.beszel_server_smart_status
             name: Overall status
-          - entity: sensor.beszel_server_smart_capacity
+          - entity: sensor.beszel_server_smart_capacity_readable
             name: Capacity
           - entity: sensor.beszel_server_smart_temperature
             name: Temperature
